@@ -148,6 +148,54 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         """Check if user email is verified."""
         return user.is_verified
 
+    async def add_role(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        role
+    ) -> User:
+        """
+        Add role to user.
+
+        Args:
+            db: Database session
+            user: User instance
+            role: Role instance
+
+        Returns:
+            Updated user instance
+        """
+        user.roles.append(role)
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    async def remove_role(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        role
+    ) -> User:
+        """
+        Remove role from user.
+
+        Args:
+            db: Database session
+            user: User instance
+            role: Role instance
+
+        Returns:
+            Updated user instance
+        """
+        user.roles.remove(role)
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
 
 # Create instance
 user_crud = CRUDUser(User)
