@@ -3,12 +3,43 @@ RefreshToken model for managing refresh tokens.
 """
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Index
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Column, DateTime, ForeignKey, String, Index, Text, TypeDecorator
+from sqlalchemy.dialects.postgresql import JSONB as PostgreSQLJSONB
 from sqlalchemy.orm import relationship
+import json
 
 from app.core.database import Base
-from app.models.base import TimestampMixin, UUIDMixin
+from app.models.base import TimestampMixin, UUIDMixin, UUID
+
+
+class JSONB(TypeDecorator):
+    """Platform-independent JSONB type.
+    Uses PostgreSQL's JSONB type on PostgreSQL, otherwise uses TEXT with JSON encoding.
+    """
+    impl = Text
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(PostgreSQLJSONB())
+        else:
+            return dialect.type_descriptor(Text())
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return value
+        else:
+            return json.dumps(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return value
+        else:
+            return json.loads(value) if value else None
 
 
 class RefreshToken(Base, UUIDMixin, TimestampMixin):
@@ -28,7 +59,7 @@ class RefreshToken(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "refresh_tokens"
 
     user_id = Column(
-        UUID(as_uuid=True),
+        UUID(),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
@@ -36,7 +67,7 @@ class RefreshToken(Base, UUIDMixin, TimestampMixin):
     token_hash = Column(String(255), nullable=False, index=True, unique=True)
     expires_at = Column(DateTime, nullable=False)
     revoked_at = Column(DateTime, nullable=True)
-    device_info = Column(JSONB, nullable=True)
+    device_info = Column(JSONB(), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="refresh_tokens")

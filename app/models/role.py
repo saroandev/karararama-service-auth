@@ -5,19 +5,18 @@ from datetime import datetime
 from typing import List
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.models.base import TimestampMixin, UUIDMixin
+from app.models.base import TimestampMixin, UUIDMixin, UUID
 
 
 # Association table for many-to-many relationship between roles and permissions
 role_permissions = Table(
     "role_permissions",
     Base.metadata,
-    Column("role_id", UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("permission_id", UUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", UUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", UUID(), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
     Column("granted_at", DateTime, default=datetime.utcnow, nullable=False),
 )
 

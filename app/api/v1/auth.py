@@ -140,3 +140,53 @@ async def get_me(
         Current user data
     """
     return current_user
+
+
+@router.post("/verify")
+async def verify_token(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Verify JWT token and return user information.
+    This endpoint is used by other services to validate tokens.
+
+    Args:
+        current_user: Current authenticated user (from JWT)
+
+    Returns:
+        Token validation result with user info, roles, permissions, and quotas
+    """
+    # Get user roles and permissions
+    roles = [role.name for role in current_user.roles]
+    permissions = []
+    for role in current_user.roles:
+        for perm in role.permissions:
+            perm_dict = {
+                "resource": perm.resource,
+                "action": perm.action
+            }
+            if perm_dict not in permissions:
+                permissions.append(perm_dict)
+
+    return {
+        "valid": True,
+        "user": {
+            "id": str(current_user.id),
+            "email": current_user.email,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "is_active": current_user.is_active,
+        },
+        "roles": roles,
+        "permissions": permissions,
+        "quotas": {
+            "daily_query_limit": current_user.daily_query_limit,
+            "monthly_query_limit": current_user.monthly_query_limit,
+            "daily_document_limit": current_user.daily_document_upload_limit,
+            "max_document_size_mb": current_user.max_document_size_mb,
+        },
+        "usage": {
+            "total_queries_used": current_user.total_queries_used,
+            "total_documents_uploaded": current_user.total_documents_uploaded,
+        }
+    }
