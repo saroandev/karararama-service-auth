@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Database
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5441
+    POSTGRES_USER: str = "onedocs_user"
+    POSTGRES_PASSWORD: str = "onedocs_pass_2024"
+    POSTGRES_DB: str = "onedocs_auth"
     DATABASE_URL: str
 
     # JWT
