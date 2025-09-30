@@ -64,7 +64,7 @@ alembic upgrade head
 
 pgAdmin'e erişmek için:
 
-1. Tarayıcınızda açın: **http://localhost:5050**
+1. Tarayıcınızda açın: **http://localhost:5051**
 2. Login bilgileri (`.env` dosyasından):
    - Email: `admin@onedocs.com`
    - Password: `admin123`
@@ -154,7 +154,7 @@ docker exec -it onedocs-auth-db psql -U onedocs_user -d onedocs_auth
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh token süresi | 7 |
 | `PGADMIN_DEFAULT_EMAIL` | pgAdmin email | admin@onedocs.com |
 | `PGADMIN_DEFAULT_PASSWORD` | pgAdmin şifre | admin123 |
-| `PGADMIN_PORT` | pgAdmin port | 5050 |
+| `PGADMIN_PORT` | pgAdmin port | 5051 |
 
 ## 📂 Proje Yapısı
 
