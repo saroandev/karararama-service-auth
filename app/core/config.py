@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    # pgAdmin (optional, not used in app)
+    PGADMIN_DEFAULT_EMAIL: str = "admin@onedocs.com"
+    PGADMIN_DEFAULT_PASSWORD: str = "admin123"
+    PGADMIN_PORT: int = 5051
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
