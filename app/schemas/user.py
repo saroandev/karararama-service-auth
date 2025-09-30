@@ -64,6 +64,16 @@ class UserWithRoles(UserResponse):
         from_attributes = True
 
 
+class UserDeleteResponse(BaseModel):
+    """Response for user deletion."""
+    id: UUID
+    email: str
+    message: str = "User deleted successfully"
+
+    class Config:
+        from_attributes = True
+
+
 # Import RoleResponse for type hint
 from app.schemas.role import RoleResponse
 UserWithRoles.model_rebuild()

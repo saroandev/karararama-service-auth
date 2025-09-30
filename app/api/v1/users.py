@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.crud import user_crud
 from app.models import User
-from app.schemas import UserResponse, UserUpdate, UserWithRoles
+from app.schemas import UserResponse, UserUpdate, UserWithRoles, UserDeleteResponse
 from app.api.deps import get_current_active_user, require_role
 
 router = APIRouter()
@@ -112,12 +112,12 @@ async def get_user(
     return user
 
 
-@router.delete("/{user_id}", response_model=UserResponse)
+@router.delete("/{user_id}", response_model=UserDeleteResponse)
 async def delete_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(["admin"]))
-) -> User:
+) -> UserDeleteResponse:
     """
     Delete user by ID (admin only).
 
@@ -126,15 +126,25 @@ async def delete_user(
         db: Database session
 
     Returns:
-        Deleted user data
+        Deletion confirmation with user details
 
     Raises:
         HTTPException: If user not found
     """
-    user = await user_crud.delete(db, id=user_id)
+    # Get user first to retrieve data before deletion
+    user = await user_crud.get(db, id=user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    return user
+
+    # Delete user
+    deleted_user = await user_crud.delete(db, id=user_id)
+
+    # Return custom response
+    return UserDeleteResponse(
+        id=user.id,
+        email=user.email,
+        message="User deleted successfully"
+    )

@@ -8,6 +8,7 @@ from app.schemas.user import (
     UserUpdatePassword,
     UserResponse,
     UserWithRoles,
+    UserDeleteResponse,
 )
 from app.schemas.role import (
     RoleBase,
@@ -37,6 +38,7 @@ __all__ = [
     "UserUpdatePassword",
     "UserResponse",
     "UserWithRoles",
+    "UserDeleteResponse",
     # Role
     "RoleBase",
     "RoleCreate",
