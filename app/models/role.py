@@ -17,11 +17,10 @@ role_permissions = Table(
     Base.metadata,
     Column("role_id", UUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
     Column("permission_id", UUID(), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
-    Column("granted_at", DateTime, default=datetime.utcnow, nullable=False),
 )
 
 
-class Role(Base, UUIDMixin, TimestampMixin):
+class Role(Base, UUIDMixin):
     """
     Role model for defining user roles and their default quotas.
 

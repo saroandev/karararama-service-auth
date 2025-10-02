@@ -17,7 +17,6 @@ user_roles = Table(
     Base.metadata,
     Column("user_id", UUID(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
     Column("role_id", UUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("assigned_at", DateTime, default=datetime.utcnow, nullable=False),
 )
 
 

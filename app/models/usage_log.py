@@ -10,7 +10,7 @@ from app.core.database import Base
 from app.models.base import TimestampMixin, UUIDMixin, UUID
 
 
-class UsageLog(Base, UUIDMixin, TimestampMixin):
+class UsageLog(Base, UUIDMixin):
     """
     Usage log model for tracking service usage and consumption.
 
@@ -20,7 +20,7 @@ class UsageLog(Base, UUIDMixin, TimestampMixin):
         service_type: Type of service consumed (ocr_text, ocr_structured, etc.)
         tokens_used: Number of tokens used in the operation
         processing_time: Processing time in seconds
-        timestamp: When the operation occurred
+        created_at: When the log was created in our system
         extra_data: Additional metadata (filename, file_size, model, etc.)
     """
 
@@ -30,7 +30,7 @@ class UsageLog(Base, UUIDMixin, TimestampMixin):
     service_type = Column(String(50), nullable=False, index=True)
     tokens_used = Column(Integer, default=0, nullable=False)
     processing_time = Column(Float, nullable=True)
-    timestamp = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     extra_data = Column(JSONB, nullable=True)
 
     # Relationship
@@ -38,8 +38,8 @@ class UsageLog(Base, UUIDMixin, TimestampMixin):
 
     # Unique constraint to prevent duplicate records
     __table_args__ = (
-        UniqueConstraint('user_id', 'timestamp', 'service_type', name='uq_usage_log'),
-        Index('idx_usage_user_time', 'user_id', 'timestamp'),
+        UniqueConstraint('user_id', 'created_at', 'service_type', name='uq_usage_log'),
+        Index('idx_usage_user_time', 'user_id', 'created_at'),
         Index('idx_usage_service_type', 'service_type'),
     )
 

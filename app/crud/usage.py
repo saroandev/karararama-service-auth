@@ -40,7 +40,6 @@ class CRUDUsage(CRUDBase[UsageLog, UsageConsumeRequest, UsageConsumeRequest]):
                 service_type=obj_in.service_type,
                 tokens_used=obj_in.tokens_used,
                 processing_time=obj_in.processing_time,
-                timestamp=obj_in.timestamp,
                 extra_data=obj_in.metadata
             )
             db.add(usage_log)
@@ -81,8 +80,8 @@ class CRUDUsage(CRUDBase[UsageLog, UsageConsumeRequest, UsageConsumeRequest]):
             .where(
                 and_(
                     UsageLog.user_id == user_id,
-                    UsageLog.timestamp >= start_of_day,
-                    UsageLog.timestamp < end_of_day
+                    UsageLog.created_at >= start_of_day,
+                    UsageLog.created_at < end_of_day
                 )
             )
         )
@@ -120,8 +119,8 @@ class CRUDUsage(CRUDBase[UsageLog, UsageConsumeRequest, UsageConsumeRequest]):
             .where(
                 and_(
                     UsageLog.user_id == user_id,
-                    UsageLog.timestamp >= start_of_month,
-                    UsageLog.timestamp < end_of_month
+                    UsageLog.created_at >= start_of_month,
+                    UsageLog.created_at < end_of_month
                 )
             )
         )
@@ -172,7 +171,7 @@ class CRUDUsage(CRUDBase[UsageLog, UsageConsumeRequest, UsageConsumeRequest]):
         result = await db.execute(
             select(UsageLog)
             .where(UsageLog.user_id == user_id)
-            .order_by(UsageLog.timestamp.desc())
+            .order_by(UsageLog.created_at.desc())
             .offset(skip)
             .limit(limit)
         )

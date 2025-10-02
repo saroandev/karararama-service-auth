@@ -14,7 +14,6 @@ class UsageConsumeRequest(BaseModel):
     service_type: str = Field(..., description="Type of service consumed (ocr_text, ocr_structured, etc.)")
     tokens_used: int = Field(default=0, ge=0, description="Number of tokens used")
     processing_time: Optional[float] = Field(None, ge=0, description="Processing time in seconds")
-    timestamp: datetime = Field(..., description="Timestamp of the operation (ISO format)")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata (filename, file_size, model, etc.)")
 
     model_config = {
@@ -24,7 +23,6 @@ class UsageConsumeRequest(BaseModel):
                 "service_type": "ocr_text",
                 "tokens_used": 326,
                 "processing_time": 1.825,
-                "timestamp": "2025-10-02T11:38:27.000000",
                 "metadata": {
                     "filename": "test.png",
                     "file_size": 1024,
