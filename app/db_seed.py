@@ -16,16 +16,19 @@ async def seed_permissions(db: AsyncSession):
         # Research permissions
         ("research", "query", "LLM sorgusu gönderme"),
         ("research", "history", "Sorgu geçmişini görüntüleme"),
+        ("research", "*", "Tüm research işlemleri"),
 
         # Document permissions
         ("documents", "upload", "Belge yükleme"),
         ("documents", "read", "Belgeleri görüntüleme"),
         ("documents", "delete", "Belge silme"),
+        ("documents", "*", "Tüm document işlemleri"),
 
         # User permissions
         ("users", "read", "Kullanıcı bilgilerini görüntüleme"),
         ("users", "update", "Kullanıcı bilgilerini güncelleme"),
         ("users", "delete", "Kullanıcı silme"),
+        ("users", "*", "Tüm user işlemleri"),
 
         # Admin permissions
         ("admin", "*", "Tüm admin işlemleri"),
@@ -63,7 +66,12 @@ async def seed_roles(db: AsyncSession, permissions: dict):
             "default_monthly_query_limit": None,
             "default_daily_document_limit": None,
             "default_max_document_size_mb": 100,
-            "permissions": ["admin:*"]  # Admin has all permissions
+            "permissions": [
+                "admin:*",
+                "research:*",
+                "documents:*",
+                "users:*"
+            ]  # Admin has all permissions for all resources
         },
         {
             "name": "user",
