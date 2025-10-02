@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 8001
 
     # pgAdmin (optional, not used in app)
     PGADMIN_DEFAULT_EMAIL: str = "admin@onedocs.com"

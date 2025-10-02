@@ -5,12 +5,14 @@ from app.models.user import User, user_roles
 from app.models.role import Role, role_permissions
 from app.models.permission import Permission
 from app.models.refresh_token import RefreshToken
+from app.models.usage_log import UsageLog
 
 __all__ = [
     "User",
     "Role",
     "Permission",
     "RefreshToken",
+    "UsageLog",
     "user_roles",
     "role_permissions",
 ]

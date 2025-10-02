@@ -29,6 +29,12 @@ from app.schemas.auth import (
     TokenPayload,
     RefreshTokenRequest,
 )
+from app.schemas.usage import (
+    UsageConsumeRequest,
+    UsageConsumeResponse,
+    UsageErrorResponse,
+    UsageLogResponse,
+)
 
 __all__ = [
     # User
@@ -55,4 +61,9 @@ __all__ = [
     "TokenResponse",
     "TokenPayload",
     "RefreshTokenRequest",
+    # Usage
+    "UsageConsumeRequest",
+    "UsageConsumeResponse",
+    "UsageErrorResponse",
+    "UsageLogResponse",
 ]
