@@ -148,13 +148,35 @@ def require_permission(resource: str, action: str):
         # Check if user has the required permission through their roles
         for role in current_user.roles:
             for permission in role.permissions:
-                if (permission.resource == resource and permission.action == action) or \
-                   (permission.resource == "*" and permission.action == "*"):
+                # Check for exact match
+                if permission.resource == resource and permission.action == action:
                     return current_user
+
+                # Check for wildcard permissions
+                # *:* = full access to everything
+                if permission.resource == "*" and permission.action == "*":
+                    return current_user
+
+                # resource:* = full access to specific resource
+                if permission.resource == resource and permission.action == "*":
+                    return current_user
+
+                # *:action = specific action on all resources
+                if permission.resource == "*" and permission.action == action:
+                    return current_user
+
+        # Collect user's permissions for error message
+        user_permissions = []
+        for role in current_user.roles:
+            for perm in role.permissions:
+                user_permissions.append({
+                    'resource': perm.resource,
+                    'action': perm.action
+                })
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Permission denied: {resource}:{action}"
+            detail=f"Permission denied: {resource}:{action}. Available permissions: {user_permissions}"
         )
 
     return permission_checker
