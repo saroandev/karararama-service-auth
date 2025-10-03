@@ -31,7 +31,7 @@ async def register(
     Register a new user.
 
     Args:
-        user_in: User registration data
+        user_in: User registration data.
         db: Database session
 
     Returns:
