@@ -4,18 +4,24 @@
 
 ## 📋 İçindekiler
 
-- [Genel Bakış](#genel-bakış)
-- [Özellikler](#özellikler)
-- [Teknoloji Stack](#teknoloji-stack)
-- [Kurulum](#kurulum)
-- [API Dokümantasyonu](#api-dokümantasyonu)
-- [Authentication Flow](#authentication-flow)
-- [Authorization & Permissions](#authorization--permissions)
-- [Usage Tracking](#usage-tracking)
-- [Database Yapısı](#database-yapısı)
-- [Güvenlik](#güvenlik)
-- [Deployment](#deployment)
-- [Örnek Kullanım Senaryoları](#örnek-kullanım-senaryoları)
+- [🎯 Genel Bakış](#-genel-bakış)
+- [🚀 Özellikler](#-özellikler)
+- [🛠 Teknoloji Stack](#-teknoloji-stack)
+- [📦 Kurulum](#-kurulum)
+- [📚 API Dokümantasyonu](#-api-dokümantasyonu)
+- [🔐 Authentication Flow](#-authentication-flow)
+- [🛡️ Authorization & Permissions](#️-authorization--permissions)
+- [📊 Usage Tracking](#-usage-tracking)
+- [🗄️ Database Yapısı](#️-database-yapısı)
+- [🔒 Güvenlik](#-güvenlik)
+- [🐳 Deployment](#-deployment)
+- [💡 Örnek Kullanım Senaryoları](#-örnek-kullanım-senaryoları)
+- [🔧 Geliştirme](#-geliştirme)
+- [🗄️ pgAdmin Kullanımı](#️-pgadmin-kullanımı)
+- [❓ Sık Sorulan Sorular (FAQ)](#-sık-sorulan-sorular-faq)
+- [📄 Hata Kodları](#-hata-kodları)
+- [📞 Destek & Katkı](#-destek--katkı)
+- [📄 Lisans](#-lisans)
 
 ---
 
