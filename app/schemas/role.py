@@ -1,7 +1,6 @@
 """
 Pydantic schemas for Role model.
 """
-from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -35,7 +34,6 @@ class RoleUpdate(BaseModel):
 class RoleResponse(RoleBase):
     """Role response schema."""
     id: UUID
-    created_at: datetime
     default_daily_query_limit: Optional[int] = None
     default_monthly_query_limit: Optional[int] = None
     default_daily_document_limit: Optional[int] = None
