@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.base import CRUDBase
-from app.models import User
+from app.models import User, Role
 from app.schemas import UserCreate, UserUpdate
 from app.core.security import password_handler
 
@@ -71,7 +71,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         obj_in: UserCreate
     ) -> User:
         """
-        Create new user with hashed password.
+        Create new user with hashed password and default 'guest' role.
 
         Args:
             db: Database session
@@ -90,6 +90,26 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         db_obj = User(**user_data)
         db.add(db_obj)
         await db.commit()
+        await db.refresh(db_obj)
+
+        # Assign default 'guest' role
+        result = await db.execute(
+            select(Role).where(Role.name == "guest")
+        )
+        guest_role = result.scalar_one_or_none()
+
+        if guest_role:
+            # Reload user with roles relationship
+            result = await db.execute(
+                select(User)
+                .where(User.id == db_obj.id)
+                .options(selectinload(User.roles))
+            )
+            user_with_roles = result.scalar_one()
+            user_with_roles.roles.append(guest_role)
+            await db.commit()
+
+        # Return user without roles loaded (for response serialization)
         await db.refresh(db_obj)
         return db_obj
 
@@ -156,7 +176,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         role
     ) -> User:
         """
-        Add role to user.
+        Add role to user. Only adds if not already assigned.
 
         Args:
             db: Database session
@@ -166,10 +186,11 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         Returns:
             Updated user instance
         """
-        user.roles.append(role)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+        if role not in user.roles:
+            user.roles.append(role)
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
         return user
 
     async def remove_role(

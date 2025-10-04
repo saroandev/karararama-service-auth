@@ -80,6 +80,7 @@ async def assign_role_to_user(
 ) -> User:
     """
     Assign role to user (admin only).
+    Note: Each user can have only one role. All existing roles will be removed.
 
     Args:
         user_id: User ID
@@ -108,14 +109,14 @@ async def assign_role_to_user(
             detail="Role not found"
         )
 
-    # Check if user already has this role
-    if role in user.roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User already has this role"
-        )
+    # Remove all existing roles (each user can have only one role)
+    for existing_role in list(user.roles):
+        await user_crud.remove_role(db, user=user, role=existing_role)
 
-    # Add role to user
+    # Reload user to get fresh state
+    user = await user_crud.get_with_roles(db, id=user_id)
+
+    # Add new role to user
     await user_crud.add_role(db, user=user, role=role)
 
     # Update user quotas based on role defaults
