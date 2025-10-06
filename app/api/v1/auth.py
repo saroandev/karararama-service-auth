@@ -32,14 +32,15 @@ async def register(
     """
     Register a new user.
 
-    Creates a new user and automatically creates a personal organization for them.
+    Creates a new user without organization or role assignment.
+    Admin must assign organization and role before user can login.
 
     Args:
         user_in: User registration data.
         db: Database session
 
     Returns:
-        Created user
+        Created user (pending organization and role assignment)
 
     Raises:
         HTTPException: If email already exists
@@ -52,21 +53,9 @@ async def register(
             detail="Email already registered"
         )
 
-    # Create new user (without organization yet)
+    # Create new user (without organization and roles)
+    # organization_id will be NULL, roles will be empty
     user = await user_crud.create(db, obj_in=user_in)
-
-    # Create personal organization for the user
-    org_name = f"{user.email}'s Organization"
-    org_in = OrganizationCreate(
-        name=org_name,
-        owner_id=user.id
-    )
-    organization = await organization_crud.create(db, obj_in=org_in)
-
-    # Update user with organization_id
-    user.organization_id = organization.id
-    await db.commit()
-    await db.refresh(user)
 
     return user
 
@@ -106,6 +95,20 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
+        )
+
+    # Check if user has organization assigned
+    if not user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending organization assignment. Please contact administrator."
+        )
+
+    # Check if user has at least one role
+    if not user.roles or len(user.roles) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending role assignment. Please contact administrator."
         )
 
     # Update last login

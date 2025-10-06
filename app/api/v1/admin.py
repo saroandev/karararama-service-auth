@@ -8,15 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.crud import user_crud, role_crud
+from app.crud import user_crud, role_crud, organization_crud
 from app.models import User
 from app.schemas import (
     RoleResponse,
     RoleCreate,
     UserWithRoles,
     UserUpdate,
+    UserResponse,
 )
-from app.api.deps import require_role
+from app.api.deps import require_role, get_current_active_user
 
 router = APIRouter()
 
@@ -80,7 +81,8 @@ async def assign_role_to_user(
 ) -> User:
     """
     Assign role to user (admin only).
-    Note: Each user can have only one role. All existing roles will be removed.
+    Note: User must have organization assigned before role assignment.
+    Each user can have only one role. All existing roles will be removed.
 
     Args:
         user_id: User ID
@@ -91,7 +93,7 @@ async def assign_role_to_user(
         Updated user with roles
 
     Raises:
-        HTTPException: If user or role not found
+        HTTPException: If user or role not found, or user has no organization
     """
     # Get user with roles
     user = await user_crud.get_with_roles(db, id=user_id)
@@ -99,6 +101,13 @@ async def assign_role_to_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+
+    # Check if user has organization assigned
+    if not user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User must be assigned to an organization before assigning role"
         )
 
     # Get role
@@ -243,3 +252,149 @@ async def update_user_quotas(
     # Return user with roles
     updated_user = await user_crud.get_with_roles(db, id=user_id)
     return updated_user
+
+
+@router.post("/users/{user_id}/organization", response_model=UserWithRoles)
+async def assign_user_to_organization(
+    user_id: UUID,
+    organization_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_role(["admin"]))
+) -> User:
+    """
+    Assign user to organization (admin only).
+    Admin can only assign users to their own organization.
+
+    Args:
+        user_id: User ID
+        organization_id: Organization ID
+        db: Database session
+        current_admin: Current admin user
+
+    Returns:
+        Updated user
+
+    Raises:
+        HTTPException: If user/org not found, user already has org, or admin trying to assign to different org
+    """
+    # Get user
+    user = await user_crud.get(db, id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check if user already has organization
+    if user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already belongs to an organization. Remove first before reassigning."
+        )
+
+    # Get organization
+    organization = await organization_crud.get(db, id=organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found"
+        )
+
+    # Check if admin is trying to assign to their own organization
+    if str(current_admin.organization_id) != str(organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only assign users to your own organization"
+        )
+
+    # Assign organization to user
+    user.organization_id = organization_id
+    await db.commit()
+    await db.refresh(user)
+
+    # Return user with roles
+    updated_user = await user_crud.get_with_roles(db, id=user_id)
+    return updated_user
+
+
+@router.delete("/users/{user_id}/organization", response_model=UserWithRoles)
+async def remove_user_from_organization(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_role(["admin"]))
+) -> User:
+    """
+    Remove user from organization (admin only).
+    Also removes all roles from user.
+    Admin can only remove users from their own organization.
+
+    Args:
+        user_id: User ID
+        db: Database session
+        current_admin: Current admin user
+
+    Returns:
+        Updated user
+
+    Raises:
+        HTTPException: If user not found, user has no org, or admin trying to remove from different org
+    """
+    # Get user with roles
+    user = await user_crud.get_with_roles(db, id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check if user has organization
+    if not user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User does not belong to any organization"
+        )
+
+    # Check if admin is trying to remove from their own organization
+    if str(current_admin.organization_id) != str(user.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only remove users from your own organization"
+        )
+
+    # Remove all roles first
+    for role in list(user.roles):
+        await user_crud.remove_role(db, user=user, role=role)
+
+    # Remove organization
+    user.organization_id = None
+    await db.commit()
+    await db.refresh(user)
+
+    # Return user with roles
+    updated_user = await user_crud.get_with_roles(db, id=user_id)
+    return updated_user
+
+
+@router.get("/users/pending", response_model=List[UserResponse])
+async def get_pending_users(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(["admin"]))
+) -> List[User]:
+    """
+    Get all users pending organization assignment (admin only).
+
+    Args:
+        db: Database session
+
+    Returns:
+        List of users without organization
+    """
+    # Get all users where organization_id is NULL
+    from sqlalchemy import select
+    from app.models import User as UserModel
+
+    stmt = select(UserModel).where(UserModel.organization_id == None)
+    result = await db.execute(stmt)
+    pending_users = list(result.scalars().all())
+
+    return pending_users
