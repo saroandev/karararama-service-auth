@@ -20,13 +20,24 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class DataAccess(BaseModel):
+    """Data access control schema."""
+    own_data: bool = True
+    shared_data: bool = False
+    all_users_data: bool = False
+
+
 class TokenPayload(BaseModel):
     """JWT token payload schema."""
-    sub: UUID  # user_id
+    sub: UUID  # user_id (renamed from user_id for JWT standard)
+    organization_id: Optional[UUID] = None
     email: str
-    roles: List[str] = []
+    role: str = "member"  # Primary role: admin, member, viewer
+    roles: List[str] = []  # All roles (for backward compatibility)
     permissions: List[dict] = []
-    quotas: Optional[dict] = None
+    data_access: Optional[DataAccess] = None
+    remaining_credits: Optional[int] = None
+    quotas: Optional[dict] = None  # For backward compatibility
     exp: int
     iat: int
     type: str  # 'access' or 'refresh'

@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import jwt_handler
-from app.crud import user_crud, refresh_token_crud
+from app.core.permissions import get_data_access_for_user, get_primary_role, calculate_remaining_credits
+from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud
 from app.models import User
 from app.schemas import (
     LoginRequest,
@@ -16,6 +17,7 @@ from app.schemas import (
     TokenResponse,
     UserCreate,
     UserResponse,
+    OrganizationCreate,
 )
 from app.api.deps import get_current_active_user
 
@@ -29,6 +31,8 @@ async def register(
 ) -> User:
     """
     Register a new user.
+
+    Creates a new user and automatically creates a personal organization for them.
 
     Args:
         user_in: User registration data.
@@ -48,8 +52,22 @@ async def register(
             detail="Email already registered"
         )
 
-    # Create new user
+    # Create new user (without organization yet)
     user = await user_crud.create(db, obj_in=user_in)
+
+    # Create personal organization for the user
+    org_name = f"{user.email}'s Organization"
+    org_in = OrganizationCreate(
+        name=org_name,
+        owner_id=user.id
+    )
+    organization = await organization_crud.create(db, obj_in=org_in)
+
+    # Update user with organization_id
+    user.organization_id = organization.id
+    await db.commit()
+    await db.refresh(user)
+
     return user
 
 
@@ -103,12 +121,26 @@ async def login(
                 "action": perm.action
             })
 
+    # Get data access permissions
+    data_access = get_data_access_for_user(user)
+
+    # Get primary role
+    primary_role = get_primary_role(user)
+
+    # Calculate remaining credits
+    today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
+    remaining_credits = calculate_remaining_credits(user, today_usage)
+
     # Create token payload
     token_data = {
         "sub": str(user.id),
+        "organization_id": str(user.organization_id) if user.organization_id else None,
         "email": user.email,
+        "role": primary_role,
         "roles": roles,
         "permissions": permissions,
+        "data_access": data_access,
+        "remaining_credits": remaining_credits,
         "quotas": {
             "daily_query_limit": user.daily_query_limit,
             "monthly_query_limit": user.monthly_query_limit,
@@ -153,6 +185,7 @@ async def get_me(
 
 @router.post("/verify")
 async def verify_token(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
@@ -177,17 +210,31 @@ async def verify_token(
             if perm_dict not in permissions:
                 permissions.append(perm_dict)
 
+    # Get data access permissions
+    data_access = get_data_access_for_user(current_user)
+
+    # Get primary role
+    primary_role = get_primary_role(current_user)
+
+    # Calculate remaining credits
+    today_usage = await usage_crud.get_user_daily_usage(db, user_id=current_user.id)
+    remaining_credits = calculate_remaining_credits(current_user, today_usage)
+
     return {
         "valid": True,
         "user": {
             "id": str(current_user.id),
+            "organization_id": str(current_user.organization_id) if current_user.organization_id else None,
             "email": current_user.email,
             "first_name": current_user.first_name,
             "last_name": current_user.last_name,
             "is_active": current_user.is_active,
         },
+        "role": primary_role,
         "roles": roles,
         "permissions": permissions,
+        "data_access": data_access,
+        "remaining_credits": remaining_credits,
         "quotas": {
             "daily_query_limit": current_user.daily_query_limit,
             "monthly_query_limit": current_user.monthly_query_limit,
@@ -267,12 +314,26 @@ async def refresh_token(
                 "action": perm.action
             })
 
+    # Get data access permissions
+    data_access = get_data_access_for_user(user)
+
+    # Get primary role
+    primary_role = get_primary_role(user)
+
+    # Calculate remaining credits
+    today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
+    remaining_credits = calculate_remaining_credits(user, today_usage)
+
     # Create new token payload
     token_data = {
         "sub": str(user.id),
+        "organization_id": str(user.organization_id) if user.organization_id else None,
         "email": user.email,
+        "role": primary_role,
         "roles": roles,
         "permissions": permissions,
+        "data_access": data_access,
+        "remaining_credits": remaining_credits,
         "quotas": {
             "daily_query_limit": user.daily_query_limit,
             "monthly_query_limit": user.monthly_query_limit,

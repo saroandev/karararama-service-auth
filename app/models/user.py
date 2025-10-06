@@ -66,7 +66,16 @@ class User(Base, UUIDMixin, TimestampMixin):
     total_queries_used = Column(Integer, default=0, nullable=False)
     total_documents_uploaded = Column(Integer, default=0, nullable=False)
 
+    # Organization
+    organization_id = Column(UUID(), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+
     # Relationships
+    organization = relationship(
+        "Organization",
+        back_populates="users",
+        foreign_keys=[organization_id],
+        lazy="selectin"
+    )
     roles = relationship(
         "Role",
         secondary=user_roles,
