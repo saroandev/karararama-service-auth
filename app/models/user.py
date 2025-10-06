@@ -17,6 +17,7 @@ user_roles = Table(
     Base.metadata,
     Column("user_id", UUID(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
     Column("role_id", UUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("organization_id", UUID(), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True),
 )
 
 

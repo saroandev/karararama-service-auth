@@ -128,6 +128,19 @@ async def assign_role_to_user(
     # Add new role to user
     await user_crud.add_role(db, user=user, role=role)
 
+    # Update user_roles with organization_id
+    from sqlalchemy import text
+    update_query = text("""
+        UPDATE user_roles
+        SET organization_id = :org_id
+        WHERE user_id = :user_id AND role_id = :role_id
+    """)
+    await db.execute(
+        update_query,
+        {"org_id": user.organization_id, "user_id": user.id, "role_id": role.id}
+    )
+    await db.commit()
+
     # Update user quotas based on role defaults
     # Always update to match the role's default values
     update_data = {
