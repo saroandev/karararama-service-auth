@@ -17,7 +17,7 @@ from app.schemas import (
     OrganizationWithStats,
     UserResponse,
 )
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, require_role
 
 router = APIRouter()
 
@@ -59,20 +59,20 @@ async def get_my_organization(
 @router.get("/me/stats", response_model=OrganizationWithStats)
 async def get_my_organization_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"]))
 ):
     """
-    Get current user's organization with statistics.
+    Get current user's organization with statistics (admin only).
 
     Args:
         db: Database session
-        current_user: Current authenticated user
+        current_user: Current admin user
 
     Returns:
         Organization with stats
 
     Raises:
-        HTTPException: If organization not found
+        HTTPException: If organization not found or not admin
     """
     if not current_user.organization_id:
         raise HTTPException(

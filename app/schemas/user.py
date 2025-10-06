@@ -32,6 +32,12 @@ class UserUpdatePassword(BaseModel):
     """Schema for updating user password."""
     old_password: str
     new_password: str = Field(..., min_length=6)
+    new_password_confirm: str = Field(..., min_length=6)
+
+    @property
+    def passwords_match(self) -> bool:
+        """Check if new passwords match."""
+        return self.new_password == self.new_password_confirm
 
 
 # Response schemas
@@ -42,6 +48,11 @@ class UserResponse(UserBase):
     is_verified: bool
     created_at: datetime
     last_login_at: Optional[datetime] = None
+
+    # Organization and Roles
+    organization_id: Optional[UUID] = None
+    organization: Optional['OrganizationResponse'] = None
+    roles: List['RoleResponse'] = []
 
     # Quota information
     daily_query_limit: Optional[int] = None
@@ -74,6 +85,8 @@ class UserDeleteResponse(BaseModel):
         from_attributes = True
 
 
-# Import RoleResponse for type hint
+# Import RoleResponse and OrganizationResponse for type hints
 from app.schemas.role import RoleResponse
+from app.schemas.organization import OrganizationResponse
+UserResponse.model_rebuild()
 UserWithRoles.model_rebuild()

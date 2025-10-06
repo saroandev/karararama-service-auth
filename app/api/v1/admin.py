@@ -77,23 +77,25 @@ async def assign_role_to_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(["admin"]))
+    current_admin: User = Depends(require_role(["admin"]))
 ) -> User:
     """
     Assign role to user (admin only).
     Note: User must have organization assigned before role assignment.
     Each user can have only one role. All existing roles will be removed.
+    Admin can only assign roles to users in their own organization.
 
     Args:
         user_id: User ID
         role_id: Role ID
         db: Database session
+        current_admin: Current admin user
 
     Returns:
         Updated user with roles
 
     Raises:
-        HTTPException: If user or role not found, or user has no organization
+        HTTPException: If user or role not found, user has no organization, or cross-org access
     """
     # Get user with roles
     user = await user_crud.get_with_roles(db, id=user_id)
@@ -108,6 +110,13 @@ async def assign_role_to_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User must be assigned to an organization before assigning role"
+        )
+
+    # Check if admin is trying to manage user from different organization
+    if str(current_admin.organization_id) != str(user.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage users in your own organization"
         )
 
     # Get role
@@ -161,21 +170,23 @@ async def remove_role_from_user(
     user_id: UUID,
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(["admin"]))
+    current_admin: User = Depends(require_role(["admin"]))
 ) -> User:
     """
     Remove role from user (admin only).
+    Admin can only remove roles from users in their own organization.
 
     Args:
         user_id: User ID
         role_id: Role ID
         db: Database session
+        current_admin: Current admin user
 
     Returns:
         Updated user with roles
 
     Raises:
-        HTTPException: If user or role not found
+        HTTPException: If user or role not found, or cross-org access
     """
     # Get user with roles
     user = await user_crud.get_with_roles(db, id=user_id)
@@ -183,6 +194,13 @@ async def remove_role_from_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+
+    # Check if admin is trying to manage user from different organization
+    if user.organization_id and str(current_admin.organization_id) != str(user.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage users in your own organization"
         )
 
     # Get role
@@ -216,10 +234,11 @@ async def update_user_quotas(
     daily_document_limit: Optional[int] = None,
     max_document_size_mb: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(["admin"]))
+    current_admin: User = Depends(require_role(["admin"]))
 ) -> User:
     """
     Update user quotas (admin only).
+    Admin can only update quotas for users in their own organization.
 
     Args:
         user_id: User ID
@@ -228,18 +247,48 @@ async def update_user_quotas(
         daily_document_limit: Daily document upload limit (None = unlimited)
         max_document_size_mb: Max document size in MB
         db: Database session
+        current_admin: Current admin user
 
     Returns:
         Updated user
 
     Raises:
-        HTTPException: If user not found
+        HTTPException: If user not found or cross-org access
     """
     user = await user_crud.get(db, id=user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+
+    # Check if admin is trying to manage user from different organization
+    if user.organization_id and str(current_admin.organization_id) != str(user.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage users in your own organization"
+        )
+
+    # Validate quota values
+    if daily_query_limit is not None and daily_query_limit < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Daily query limit must be non-negative"
+        )
+    if monthly_query_limit is not None and monthly_query_limit < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Monthly query limit must be non-negative"
+        )
+    if daily_document_limit is not None and daily_document_limit < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Daily document limit must be non-negative"
+        )
+    if max_document_size_mb is not None and (max_document_size_mb < 1 or max_document_size_mb > 100):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Max document size must be between 1 and 100 MB"
         )
 
     # Build update dict
@@ -270,17 +319,15 @@ async def update_user_quotas(
 @router.post("/users/{user_id}/organization", response_model=UserWithRoles)
 async def assign_user_to_organization(
     user_id: UUID,
-    organization_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_role(["admin"]))
 ) -> User:
     """
-    Assign user to organization (admin only).
-    Admin can only assign users to their own organization.
+    Assign user to admin's organization (admin only).
+    Automatically assigns user to the admin's organization.
 
     Args:
         user_id: User ID
-        organization_id: Organization ID
         db: Database session
         current_admin: Current admin user
 
@@ -288,8 +335,15 @@ async def assign_user_to_organization(
         Updated user
 
     Raises:
-        HTTPException: If user/org not found, user already has org, or admin trying to assign to different org
+        HTTPException: If user not found, user already has org, or admin has no organization
     """
+    # Check if admin has organization
+    if not current_admin.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin user must have an organization assigned"
+        )
+
     # Get user
     user = await user_crud.get(db, id=user_id)
     if not user:
@@ -305,25 +359,23 @@ async def assign_user_to_organization(
             detail="User already belongs to an organization. Remove first before reassigning."
         )
 
-    # Get organization
-    organization = await organization_crud.get(db, id=organization_id)
-    if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
-        )
-
-    # Check if admin is trying to assign to their own organization
-    if str(current_admin.organization_id) != str(organization_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only assign users to your own organization"
-        )
-
-    # Assign organization to user
-    user.organization_id = organization_id
+    # Assign admin's organization to user
+    user.organization_id = current_admin.organization_id
     await db.commit()
     await db.refresh(user)
+
+    # Update user_roles table with organization_id if user has any roles
+    from sqlalchemy import text
+    update_query = text("""
+        UPDATE user_roles
+        SET organization_id = :org_id
+        WHERE user_id = :user_id
+    """)
+    await db.execute(
+        update_query,
+        {"org_id": current_admin.organization_id, "user_id": user_id}
+    )
+    await db.commit()
 
     # Return user with roles
     updated_user = await user_crud.get_with_roles(db, id=user_id)
@@ -411,3 +463,48 @@ async def get_pending_users(
     pending_users = list(result.scalars().all())
 
     return pending_users
+
+
+@router.patch("/users/{user_id}/status", response_model=UserWithRoles)
+async def update_user_status(
+    user_id: UUID,
+    is_active: bool,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_role(["admin"]))
+) -> User:
+    """
+    Activate or deactivate user (admin only).
+    Admin can only manage users in their own organization.
+
+    Args:
+        user_id: User ID
+        is_active: Active status (true/false)
+        db: Database session
+        current_admin: Current admin user
+
+    Returns:
+        Updated user
+
+    Raises:
+        HTTPException: If user not found or cross-org access
+    """
+    user = await user_crud.get(db, id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check if admin is trying to manage user from different organization
+    if user.organization_id and str(current_admin.organization_id) != str(user.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage users in your own organization"
+        )
+
+    # Update user status
+    await user_crud.update(db, db_obj=user, obj_in={"is_active": is_active})
+
+    # Return user with roles
+    updated_user = await user_crud.get_with_roles(db, id=user_id)
+    return updated_user

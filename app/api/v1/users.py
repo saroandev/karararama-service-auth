@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import verify_password, get_password_hash
 from app.crud import user_crud
 from app.models import User
-from app.schemas import UserResponse, UserUpdate, UserWithRoles, UserDeleteResponse
+from app.schemas import UserResponse, UserUpdate, UserWithRoles, UserDeleteResponse, UserUpdatePassword
 from app.api.deps import get_current_active_user, require_role
 
 router = APIRouter()
@@ -59,6 +60,59 @@ async def update_current_user(
             )
 
     updated_user = await user_crud.update(db, db_obj=current_user, obj_in=user_update)
+    return updated_user
+
+
+@router.put("/me/password", response_model=UserResponse)
+async def update_current_user_password(
+    password_update: UserUpdatePassword,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+) -> User:
+    """
+    Update current user's password.
+
+    Args:
+        password_update: Password update data (old_password, new_password, new_password_confirm)
+        db: Database session
+        current_user: Current authenticated user
+
+    Returns:
+        Updated user data
+
+    Raises:
+        HTTPException: If passwords don't match, old password is incorrect, new password is weak, or same as old
+    """
+    # Check if new passwords match
+    if not password_update.passwords_match:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New passwords do not match"
+        )
+
+    # Verify old password
+    if not verify_password(password_update.old_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect old password"
+        )
+
+    # Check if new password is same as old password
+    if verify_password(password_update.new_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from old password"
+        )
+
+    # Password strength is already validated by Pydantic (min_length=6)
+    # Hash and update password
+    new_password_hash = get_password_hash(password_update.new_password)
+    updated_user = await user_crud.update(
+        db,
+        db_obj=current_user,
+        obj_in={"password_hash": new_password_hash}
+    )
+
     return updated_user
 
 
