@@ -68,3 +68,8 @@ class Role(Base, UUIDMixin):
     def is_admin(self) -> bool:
         """Check if this is an admin role."""
         return self.name.lower() == "admin"
+
+    @property
+    def is_superuser(self) -> bool:
+        """Check if this is a superuser role."""
+        return self.name.lower() == "superuser"

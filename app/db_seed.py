@@ -162,6 +162,30 @@ async def seed_roles(db: AsyncSession, permissions: dict):
     """Seed roles into database."""
     roles_data = [
         {
+            "name": "superuser",
+            "description": "Superuser - tüm sistemi kontrol eden en yetkili kullanıcı",
+            "default_daily_query_limit": None,  # Sınırsız
+            "default_monthly_query_limit": None,
+            "default_daily_document_limit": None,
+            "default_max_document_size_mb": 100,
+            "permissions": [
+                "admin:*",
+                "auth:*",
+                "users:*",
+                "documents:*",
+                "research:*",
+                "usage:*",
+                "billing:*",
+                "notifications:*",
+                "workspaces:*",
+                "sharing:*",
+                "comments:*",
+                "integrations:*",
+                "data:*",
+                "security:*"
+            ]  # Superuser has all permissions
+        },
+        {
             "name": "admin",
             "description": "Admin kullanıcı - sınırsız erişim",
             "default_daily_query_limit": None,  # Sınırsız

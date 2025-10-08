@@ -127,6 +127,16 @@ async def assign_role_to_user(
             detail="Role not found"
         )
 
+    # Check if trying to assign superuser role
+    if role.name.lower() == "superuser":
+        # Only superusers can assign superuser role
+        current_admin_roles = [r.name.lower() for r in current_admin.roles]
+        if "superuser" not in current_admin_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only superusers can assign the superuser role"
+            )
+
     # Remove all existing roles (each user can have only one role)
     for existing_role in list(user.roles):
         await user_crud.remove_role(db, user=user, role=existing_role)

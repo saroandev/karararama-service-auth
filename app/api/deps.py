@@ -104,6 +104,10 @@ def require_role(required_roles: List[str]):
     ) -> User:
         user_roles = [role.name for role in current_user.roles]
 
+        # Superuser has access to everything
+        if "superuser" in user_roles:
+            return current_user
+
         # Admin has access to everything
         if "admin" in user_roles:
             return current_user
@@ -140,6 +144,10 @@ def require_permission(resource: str, action: str):
         current_user: User = Depends(get_current_active_user)
     ) -> User:
         user_roles = [role.name for role in current_user.roles]
+
+        # Superuser has all permissions
+        if "superuser" in user_roles:
+            return current_user
 
         # Admin has all permissions
         if "admin" in user_roles:

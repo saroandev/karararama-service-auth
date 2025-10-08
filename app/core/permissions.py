@@ -7,6 +7,11 @@ from app.models import User
 
 # Role-based data access mapping
 DATA_ACCESS_BY_ROLE = {
+    "superuser": {
+        "own_data": True,
+        "shared_data": True,
+        "all_users_data": True
+    },
     "admin": {
         "own_data": True,
         "shared_data": True,
@@ -43,6 +48,10 @@ def get_data_access_for_user(user: User) -> dict:
     # Get all role names
     role_names = [role.name.lower() for role in user.roles]
 
+    # Superuser users get full access
+    if "superuser" in role_names:
+        return DATA_ACCESS_BY_ROLE["superuser"]
+
     # Admin users get full access
     if "admin" in role_names:
         return DATA_ACCESS_BY_ROLE["admin"]
@@ -67,7 +76,7 @@ def get_primary_role(user: User) -> str:
     """
     Get the primary (most privileged) role for a user.
 
-    Role hierarchy: admin > member/user > viewer > guest/demo
+    Role hierarchy: superuser > admin > member/user > viewer > guest/demo
 
     Args:
         user: User model instance
@@ -78,6 +87,8 @@ def get_primary_role(user: User) -> str:
     role_names = [role.name.lower() for role in user.roles]
 
     # Check in priority order
+    if "superuser" in role_names:
+        return "superuser"
     if "admin" in role_names:
         return "admin"
     if "member" in role_names or "user" in role_names:
