@@ -20,6 +20,28 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-service:
+    build:
+      context: .
+      target: production
+    container_name: onedocs-auth-service
+    env_file:
+      - .env
+    ports:
+      - "8001:8001"
+    networks:
+      - onedocs-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: onedocs-auth-pgadmin
