@@ -1,13 +1,13 @@
 """
-Database seeding script for roles and permissions.
+Database seeding script for roles, permissions, organizations and default admin user.
 """
 import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
-from app.crud import role_crud, permission_crud
-from app.schemas import RoleCreate, PermissionCreate
+from app.crud import role_crud, permission_crud, user_crud, organization_crud
+from app.schemas import RoleCreate, PermissionCreate, UserCreate, OrganizationCreate
 
 
 async def seed_permissions(db: AsyncSession):
@@ -317,7 +317,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
             "default_daily_query_limit": 3,
             "default_monthly_query_limit": 30,
             "default_daily_document_limit": 0,
-            "default_max_document_size_mb": 0,
+            "default_max_document_size_mb": 1,  # Minimum 1 MB required
             "permissions": [
                 # Auth
                 "auth:login", "auth:logout",
@@ -361,6 +361,66 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                     print(f"  ➕ Added permission {perm_key} to {role.name}")
 
 
+async def seed_default_organization(db: AsyncSession):
+    """Seed default organization."""
+    print("\n🏢 Seeding default organization...")
+
+    # Check if default organization exists
+    existing_org = await organization_crud.get_by_name(db, name="Default Organization")
+
+    if not existing_org:
+        org_in = OrganizationCreate(
+            name="Default Organization",
+            description="Default organization for system administrators",
+            is_active=True
+        )
+        org = await organization_crud.create(db, obj_in=org_in)
+        print(f"✅ Created organization: {org.name}")
+        return org
+    else:
+        print(f"⏭️  Organization already exists: {existing_org.name}")
+        return existing_org
+
+
+async def seed_default_admin(db: AsyncSession, organization_id, admin_role_id):
+    """Seed default admin user."""
+    print("\n👤 Seeding default admin user...")
+
+    # Check if admin user exists
+    existing_user = await user_crud.get_by_email(db, email="admin@onedocs.com")
+
+    if not existing_user:
+        user_in = UserCreate(
+            email="admin@onedocs.com",
+            password="admin123",  # Default password (min 6 chars)
+            first_name="Admin",
+            last_name="User",
+            is_active=True,
+            is_verified=True
+        )
+        user = await user_crud.create(db, obj_in=user_in)
+
+        # Assign organization
+        user.organization_id = organization_id
+        await db.commit()
+        await db.refresh(user)
+
+        # Assign admin role
+        admin_role = await role_crud.get(db, id=admin_role_id)
+        if admin_role:
+            await user_crud.add_role(db, user=user, role=admin_role)
+            print(f"  ➕ Added admin role to user")
+
+        print(f"✅ Created admin user: {user.email}")
+        print(f"   Email: admin@onedocs.com")
+        print(f"   Password: admin123")
+        print(f"   ⚠️  IMPORTANT: Please change the default password after first login!")
+        return user
+    else:
+        print(f"⏭️  Admin user already exists: {existing_user.email}")
+        return existing_user
+
+
 async def seed_database():
     """Main seeding function."""
     print("🌱 Starting database seeding...")
@@ -374,6 +434,18 @@ async def seed_database():
             # Then seed roles with permissions
             print("\n👥 Seeding roles...")
             await seed_roles(db, permissions)
+
+            # Get admin role for default user
+            admin_role = await role_crud.get_by_name(db, name="admin")
+            if not admin_role:
+                print("❌ Admin role not found! Cannot create default admin user.")
+                return
+
+            # Seed default organization
+            default_org = await seed_default_organization(db)
+
+            # Seed default admin user
+            await seed_default_admin(db, organization_id=default_org.id, admin_role_id=admin_role.id)
 
             print("\n✅ Database seeding completed successfully!")
 

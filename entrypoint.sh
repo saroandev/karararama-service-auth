@@ -24,7 +24,13 @@ echo "PostgreSQL is up - executing migrations"
 # Run database migrations
 alembic upgrade head
 
-echo "Migrations completed - starting application"
+echo "Migrations completed - seeding database"
+
+# Set PYTHONPATH and run database seeding
+export PYTHONPATH=/app:$PYTHONPATH
+python -m app.db_seed
+
+echo "Database seeding completed - starting application"
 
 # Switch to appuser and execute the main container command
 exec gosu appuser "$@"
