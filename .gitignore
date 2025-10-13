@@ -23,7 +23,7 @@ wheels/
 # Virtual Environment
 venv/
 ENV/
-env/
+#env/
 .venv
 
 # IDE
@@ -35,9 +35,9 @@ env/
 .DS_Store
 
 # Environment variables
-.env
-.env.local
-.env.*.local
+#.env
+#.env.local
+#.env.*.local
 
 # Database
 *.db
