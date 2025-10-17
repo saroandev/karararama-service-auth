@@ -42,13 +42,13 @@ async def consume_usage(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
+            detail="Kullanıcı hesabı aktif değil"
         )
 
     # 2. Check daily query limit
@@ -64,7 +64,7 @@ async def consume_usage(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
                     "success": False,
-                    "error": "Daily query limit exceeded",
+                    "error": "Günlük sorgu limiti aşıldı",
                     "daily_limit": user.daily_query_limit,
                     "used_today": daily_usage,
                     "reset_time": tomorrow.isoformat() + "Z"
@@ -87,7 +87,7 @@ async def consume_usage(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
                     "success": False,
-                    "error": "Monthly query limit exceeded",
+                    "error": "Aylık sorgu limiti aşıldı",
                     "monthly_limit": user.monthly_query_limit,
                     "used_this_month": monthly_usage,
                     "reset_time": reset_time.isoformat() + "Z"
@@ -122,7 +122,7 @@ async def consume_usage(
         remaining_credits=remaining_credits,
         credits_consumed=1,
         user_id=user.id,
-        message="Usage recorded successfully"
+        message="Kullanım başarıyla kaydedildi"
     )
 
 
@@ -151,14 +151,14 @@ async def get_user_usage_stats(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid user ID format"
+            detail="Geçersiz kullanıcı ID formatı"
         )
 
     user = await user_crud.get(db, id=user_uuid)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     daily_usage = await usage_crud.get_user_daily_usage(db, user_id=user_uuid)

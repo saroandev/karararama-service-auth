@@ -65,7 +65,7 @@ async def create_role(
     if existing_role:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Role with this name already exists"
+            detail="Bu isimde bir rol zaten mevcut"
         )
 
     role = await role_crud.create(db, obj_in=role_in)
@@ -102,21 +102,21 @@ async def assign_role_to_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     # Check if user has organization assigned
     if not user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User must be assigned to an organization before assigning role"
+            detail="Kullanıcıya rol atamadan önce organizasyon atanmalı"
         )
 
     # Check if admin is trying to manage user from different organization
     if str(current_admin.organization_id) != str(user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only manage users in your own organization"
+            detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
 
     # Get role
@@ -124,7 +124,7 @@ async def assign_role_to_user(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            detail="Rol bulunamadı"
         )
 
     # Check if trying to assign superuser role
@@ -134,7 +134,7 @@ async def assign_role_to_user(
         if "superuser" not in current_admin_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only superusers can assign the superuser role"
+                detail="Sadece superuser'lar superuser rolü atayabilir"
             )
 
     # Remove all existing roles (each user can have only one role)
@@ -203,14 +203,14 @@ async def remove_role_from_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     # Check if admin is trying to manage user from different organization
     if user.organization_id and str(current_admin.organization_id) != str(user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only manage users in your own organization"
+            detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
 
     # Get role
@@ -218,14 +218,14 @@ async def remove_role_from_user(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            detail="Rol bulunamadı"
         )
 
     # Check if user has this role
     if role not in user.roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User does not have this role"
+            detail="Kullanıcının bu rolü yok"
         )
 
     # Remove role from user
@@ -269,36 +269,36 @@ async def update_user_quotas(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     # Check if admin is trying to manage user from different organization
     if user.organization_id and str(current_admin.organization_id) != str(user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only manage users in your own organization"
+            detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
 
     # Validate quota values
     if daily_query_limit is not None and daily_query_limit < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Daily query limit must be non-negative"
+            detail="Günlük sorgu limiti negatif olamaz"
         )
     if monthly_query_limit is not None and monthly_query_limit < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Monthly query limit must be non-negative"
+            detail="Aylık sorgu limiti negatif olamaz"
         )
     if daily_document_limit is not None and daily_document_limit < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Daily document limit must be non-negative"
+            detail="Günlük belge limiti negatif olamaz"
         )
     if max_document_size_mb is not None and (max_document_size_mb < 1 or max_document_size_mb > 100):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Max document size must be between 1 and 100 MB"
+            detail="Maksimum belge boyutu 1 ile 100 MB arasında olmalı"
         )
 
     # Build update dict
@@ -315,7 +315,7 @@ async def update_user_quotas(
     if not update_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No quota values provided"
+            detail="Kota değeri sağlanmadı"
         )
 
     # Update user
@@ -351,7 +351,7 @@ async def assign_user_to_organization(
     if not current_admin.organization_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin user must have an organization assigned"
+            detail="Admin kullanıcısının bir organizasyonu olmalı"
         )
 
     # Get user
@@ -359,14 +359,14 @@ async def assign_user_to_organization(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     # Check if user already has organization
     if user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User already belongs to an organization. Remove first before reassigning."
+            detail="Kullanıcı zaten bir organizasyona ait. Yeniden atamadan önce mevcut organizasyonu kaldırın."
         )
 
     # Assign admin's organization to user
@@ -419,21 +419,21 @@ async def remove_user_from_organization(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     # Check if user has organization
     if not user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User does not belong to any organization"
+            detail="Kullanıcı herhangi bir organizasyona ait değil"
         )
 
     # Check if admin is trying to remove from their own organization
     if str(current_admin.organization_id) != str(user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only remove users from your own organization"
+            detail="Sadece kendi organizasyonunuzdan kullanıcı çıkarabilirsiniz"
         )
 
     # Remove all roles first
@@ -502,14 +502,14 @@ async def update_user_status(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     # Check if admin is trying to manage user from different organization
     if user.organization_id and str(current_admin.organization_id) != str(user.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only manage users in your own organization"
+            detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
 
     # Update user status

@@ -50,7 +50,7 @@ async def register(
     if not user_in.validate_passwords():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match"
+            detail="Şifreler eşleşmiyor"
         )
 
     # Check if user already exists
@@ -58,7 +58,7 @@ async def register(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Bu e-posta adresi zaten kayıtlı"
         )
 
     # Split full_name into first_name and last_name
@@ -133,20 +133,20 @@ async def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="E-posta veya şifre hatalı"
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
+            detail="Hesap aktif değil"
         )
 
     # Check if user has at least one role
     if not user.roles or len(user.roles) == 0:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account is pending role assignment. Please contact administrator."
+            detail="Hesabınız rol ataması bekliyor. Lütfen yönetici ile iletişime geçin."
         )
 
     # Check organization assignment (except for guest/demo users)
@@ -156,7 +156,7 @@ async def login(
     if not user.organization_id and not is_guest_or_demo:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account is pending organization assignment. Please contact administrator."
+            detail="Hesabınız organizasyon ataması bekliyor. Lütfen yönetici ile iletişime geçin."
         )
 
     # Update last login
@@ -323,13 +323,13 @@ async def refresh_token(
     if not db_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
+            detail="Geçersiz refresh token"
         )
 
     if not db_token.is_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token expired or revoked"
+            detail="Refresh token süresi dolmuş veya iptal edilmiş"
         )
 
     # Verify JWT token
@@ -338,13 +338,13 @@ async def refresh_token(
         if payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type"
+                detail="Geçersiz token tipi"
             )
         user_id = payload.get("sub")
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
+            detail="Geçersiz refresh token"
         )
 
     # Get user with roles and permissions
@@ -352,7 +352,7 @@ async def refresh_token(
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive"
+            detail="Kullanıcı bulunamadı veya hesap aktif değil"
         )
 
     # Get user roles and permissions
@@ -437,7 +437,7 @@ async def logout(
     if not revoked:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Refresh token not found"
+            detail="Refresh token bulunamadı"
         )
 
-    return {"message": "Successfully logged out"}
+    return {"message": "Başarıyla çıkış yapıldı"}

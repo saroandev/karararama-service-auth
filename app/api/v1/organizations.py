@@ -43,14 +43,14 @@ async def get_my_organization(
     if not current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User has no organization"
+            detail="Kullanıcının organizasyonu yok"
         )
 
     organization = await organization_crud.get(db, id=current_user.organization_id)
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
+            detail="Organizasyon bulunamadı"
         )
 
     return organization
@@ -77,14 +77,14 @@ async def get_my_organization_stats(
     if not current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User has no organization"
+            detail="Kullanıcının organizasyonu yok"
         )
 
     organization = await organization_crud.get(db, id=current_user.organization_id)
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
+            detail="Organizasyon bulunamadı"
         )
 
     # Get stats
@@ -119,7 +119,7 @@ async def get_my_organization_members(
     if not current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User has no organization"
+            detail="Kullanıcının organizasyonu yok"
         )
 
     members = await organization_crud.get_members(db, organization_id=current_user.organization_id)
@@ -150,7 +150,7 @@ async def get_organization(
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
+            detail="Organizasyon bulunamadı"
         )
 
     # Check if user has access to this organization
@@ -160,7 +160,7 @@ async def get_organization(
         if "admin" not in user_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this organization"
+                detail="Bu organizasyona erişim reddedildi"
             )
 
     return organization
@@ -192,7 +192,7 @@ async def update_organization(
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
+            detail="Organizasyon bulunamadı"
         )
 
     # Check if user is the owner or admin
@@ -203,7 +203,7 @@ async def update_organization(
     if not (is_owner or is_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only organization owner or admin can update"
+            detail="Sadece organizasyon sahibi veya admin güncelleyebilir"
         )
 
     updated_org = await organization_crud.update(db, db_obj=organization, obj_in=org_in)

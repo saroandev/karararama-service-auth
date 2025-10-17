@@ -56,7 +56,7 @@ async def update_current_user(
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Bu e-posta adresi zaten kayıtlı"
             )
 
     updated_user = await user_crud.update(db, db_obj=current_user, obj_in=user_update)
@@ -87,21 +87,21 @@ async def update_current_user_password(
     if not password_update.passwords_match:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New passwords do not match"
+            detail="Yeni şifreler eşleşmiyor"
         )
 
     # Verify old password
     if not verify_password(password_update.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect old password"
+            detail="Eski şifre hatalı"
         )
 
     # Check if new password is same as old password
     if verify_password(password_update.new_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be different from old password"
+            detail="Yeni şifre eskisinden farklı olmalı"
         )
 
     # Password strength is already validated by Pydantic (min_length=6)
@@ -161,7 +161,7 @@ async def get_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
     return user
 
@@ -190,7 +190,7 @@ async def delete_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     # Delete user
@@ -200,5 +200,5 @@ async def delete_user(
     return UserDeleteResponse(
         id=user.id,
         email=user.email,
-        message="User deleted successfully"
+        message="Kullanıcı başarıyla silindi"
     )

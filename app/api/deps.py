@@ -43,19 +43,19 @@ async def get_current_user(
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials"
+                detail="Kimlik doğrulama başarısız"
             )
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
+            detail="Kimlik doğrulama başarısız"
         )
 
     user = await user_crud.get_with_roles(db, id=UUID(user_id))
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Kullanıcı bulunamadı"
         )
 
     return user
@@ -79,7 +79,7 @@ async def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
+            detail="Hesap aktif değil"
         )
     return current_user
 
@@ -116,7 +116,7 @@ def require_role(required_roles: List[str]):
         if not any(role in user_roles for role in required_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Required role: {', '.join(required_roles)}"
+                detail=f"Gerekli rol: {', '.join(required_roles)}"
             )
 
         return current_user
@@ -184,7 +184,7 @@ def require_permission(resource: str, action: str):
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Permission denied: {resource}:{action}. Available permissions: {user_permissions}"
+            detail=f"İzin reddedildi: {resource}:{action}. Mevcut izinler: {user_permissions}"
         )
 
     return permission_checker
