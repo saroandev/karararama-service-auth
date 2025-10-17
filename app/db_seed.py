@@ -42,6 +42,7 @@ async def seed_permissions(db: AsyncSession):
         ("documents", "share", "Belge paylaşma"),
         ("documents", "tag", "Belge etiketleme"),
         ("documents", "search", "Belge arama"),
+        ("documents", "extract", "Belge içeriği çıkarma (OCR, metin)"),
         ("documents", "edit_metadata", "Meta veri düzenleme"),
         ("documents", "bulk_operations", "Toplu işlemler"),
         ("documents", "manage_versions", "Versiyon yönetimi"),
@@ -269,7 +270,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "users:manage_notifications",
                 # Documents - Basic operations
                 "documents:upload", "documents:read", "documents:update", "documents:delete",
-                "documents:download", "documents:search", "documents:tag",
+                "documents:download", "documents:search", "documents:tag", "documents:extract",
                 # Research - Basic
                 "research:query", "research:history", "research:save", "research:delete_saved",
                 # Usage
@@ -302,7 +303,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Users - Read only
                 "users:read",
                 # Documents - Limited
-                "documents:upload", "documents:read", "documents:search",
+                "documents:upload", "documents:read", "documents:search", "documents:extract",
                 # Research - Limited
                 "research:query", "research:history",
                 # Usage

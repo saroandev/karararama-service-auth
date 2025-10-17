@@ -60,6 +60,8 @@ OneDocs mikroservis mimarisinde diğer servislere (OCR, RAG, LLM, Crawler) merke
 
 ### 2. Lokal Development Setup
 
+**Not:** `.env` dosyası git'e commit edilmez. Her developer kendi `.env` dosyasını oluşturmalıdır.
+
 ```bash
 # Clone repo
 git clone <repo-url>
@@ -72,9 +74,12 @@ source venv/bin/activate  # Linux/Mac
 # Install dependencies
 pip install -r requirements.txt
 
-# Environment variables
+# Environment variables oluştur
 cp .env.example .env
-# .env dosyasını düzenle
+# .env dosyasını düzenle:
+# - POSTGRES_HOST=localhost (local Python için)
+# - POSTGRES_PASSWORD=güçlü bir şifre
+# - JWT_SECRET_KEY=openssl rand -hex 32 ile oluştur
 
 # Start PostgreSQL
 docker compose up -d postgres
@@ -90,6 +95,16 @@ python create_default_org.py
 # veya
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
+
+#### Environment Yapılandırması
+
+| Ortam | POSTGRES_HOST | Açıklama |
+|-------|---------------|----------|
+| **Local Python** | `localhost` | App local'de, DB Docker'da |
+| **Docker Compose** | `postgres` | App ve DB Docker'da |
+| **Kubernetes (Cloud)** | `auth.yaml` | ConfigMap + Secret kullanılır |
+
+**Local geliştirme için** `.env` dosyanızda `POSTGRES_HOST=localhost` kullanın.
 
 ### 3. Erişim
 
