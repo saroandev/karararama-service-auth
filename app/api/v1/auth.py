@@ -32,15 +32,16 @@ async def register(
     """
     Register a new user.
 
-    Creates a new user without organization or role assignment.
-    Admin must assign organization and role before user can login.
+    Creates a new user with default 'guest' role.
+    Guest users can login immediately with limited permissions.
+    Other roles require admin to assign organization.
 
     Args:
         user_in: User registration data (full_name, email, password, password_confirm).
         db: Database session
 
     Returns:
-        Created user (pending organization and role assignment)
+        Created user with guest role
 
     Raises:
         HTTPException: If email already exists or passwords don't match
@@ -141,18 +142,21 @@ async def login(
             detail="Inactive user"
         )
 
-    # Check if user has organization assigned
-    if not user.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account is pending organization assignment. Please contact administrator."
-        )
-
     # Check if user has at least one role
     if not user.roles or len(user.roles) == 0:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account is pending role assignment. Please contact administrator."
+        )
+
+    # Check organization assignment (except for guest/demo users)
+    role_names = [role.name.lower() for role in user.roles]
+    is_guest_or_demo = "guest" in role_names or "demo" in role_names
+
+    if not user.organization_id and not is_guest_or_demo:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending organization assignment. Please contact administrator."
         )
 
     # Update last login
