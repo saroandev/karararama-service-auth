@@ -36,15 +36,22 @@ async def register(
     Admin must assign organization and role before user can login.
 
     Args:
-        user_in: User registration data.
+        user_in: User registration data (full_name, email, password, password_confirm).
         db: Database session
 
     Returns:
         Created user (pending organization and role assignment)
 
     Raises:
-        HTTPException: If email already exists
+        HTTPException: If email already exists or passwords don't match
     """
+    # Check if passwords match
+    if not user_in.validate_passwords():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match"
+        )
+
     # Check if user already exists
     existing_user = await user_crud.get_by_email(db, email=user_in.email)
     if existing_user:
@@ -53,11 +60,48 @@ async def register(
             detail="Email already registered"
         )
 
-    # Create new user (without organization and roles)
-    # organization_id will be NULL, roles will be empty
-    user = await user_crud.create(db, obj_in=user_in)
+    # Split full_name into first_name and last_name
+    first_name, last_name = user_in.get_first_last_name()
 
-    return user
+    # Hash password
+    from app.core.security import password_handler
+    hashed_password = password_handler.hash_password(user_in.password)
+
+    # Create user directly
+    from app.models import User
+    db_obj = User(
+        email=user_in.email,
+        first_name=first_name,
+        last_name=last_name,
+        password_hash=hashed_password
+    )
+    db.add(db_obj)
+    await db.commit()
+    await db.refresh(db_obj)
+
+    # Assign default 'guest' role
+    from app.models import Role
+    from sqlalchemy import select
+    result = await db.execute(
+        select(Role).where(Role.name == "guest")
+    )
+    guest_role = result.scalar_one_or_none()
+
+    if guest_role:
+        # Reload user with roles relationship
+        from sqlalchemy.orm import selectinload
+        result = await db.execute(
+            select(User)
+            .where(User.id == db_obj.id)
+            .options(selectinload(User.roles))
+        )
+        user_with_roles = result.scalar_one()
+        user_with_roles.roles.append(guest_role)
+        await db.commit()
+
+    # Return user without roles loaded (for response serialization)
+    await db.refresh(db_obj)
+    return db_obj
 
 
 @router.post("/login", response_model=TokenResponse)

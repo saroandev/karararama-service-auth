@@ -205,12 +205,35 @@ http://localhost:8001/api/v1
 ```bash
 POST /api/v1/auth/register
 {
+  "full_name": "Ahmet Yılmaz",
   "email": "user@example.com",
   "password": "SecurePass123!",
-  "first_name": "John",
-  "last_name": "Doe"
+  "password_confirm": "SecurePass123!"
 }
+
+# Response (201 Created)
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "first_name": "Ahmet",
+  "last_name": "Yılmaz",
+  "is_active": true,
+  "is_verified": false,
+  "created_at": "2025-10-16T14:30:00Z",
+  ...
+}
+
+# Errors
+# 400 - Passwords do not match
+# 400 - Email already registered
 ```
+
+**Not:**
+- `full_name` alanı otomatik olarak `first_name` ve `last_name`'e bölünür
+- Şifre en az 6 karakter olmalıdır
+- Şifre ve şifre tekrarı eşleşmelidir
+- Kullanıcı otomatik olarak "guest" rolü ile oluşturulur
+- Admin tarafından organizasyon ve rol ataması yapılana kadar kullanıcı login olamaz
 
 ### 2. Login
 
