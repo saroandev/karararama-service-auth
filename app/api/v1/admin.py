@@ -16,6 +16,7 @@ from app.schemas import (
     UserWithRoles,
     UserUpdate,
     UserResponse,
+    UserAssignToOrgRequest,
 )
 from app.api.deps import require_role, get_current_active_user
 
@@ -326,9 +327,9 @@ async def update_user_quotas(
     return updated_user
 
 
-@router.post("/users/{user_id}/organization", response_model=UserWithRoles)
+@router.post("/users/organization/assign", response_model=UserWithRoles)
 async def assign_user_to_organization(
-    user_id: UUID,
+    request: UserAssignToOrgRequest,
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_role(["admin"]))
 ) -> User:
@@ -337,7 +338,7 @@ async def assign_user_to_organization(
     Automatically assigns user to the admin's organization.
 
     Args:
-        user_id: User ID
+        request: Request containing user email
         db: Database session
         current_admin: Current admin user
 
@@ -354,8 +355,8 @@ async def assign_user_to_organization(
             detail="Admin kullanıcısının bir organizasyonu olmalı"
         )
 
-    # Get user
-    user = await user_crud.get(db, id=user_id)
+    # Get user by email
+    user = await user_crud.get_by_email(db, email=request.email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -383,12 +384,12 @@ async def assign_user_to_organization(
     """)
     await db.execute(
         update_query,
-        {"org_id": current_admin.organization_id, "user_id": user_id}
+        {"org_id": current_admin.organization_id, "user_id": user.id}
     )
     await db.commit()
 
     # Return user with roles
-    updated_user = await user_crud.get_with_roles(db, id=user_id)
+    updated_user = await user_crud.get_with_roles(db, id=user.id)
     return updated_user
 
 

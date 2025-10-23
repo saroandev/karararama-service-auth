@@ -99,6 +99,11 @@ class UserDeleteResponse(BaseModel):
         from_attributes = True
 
 
+class UserAssignToOrgRequest(BaseModel):
+    """Schema for assigning user to organization by email."""
+    email: EmailStr
+
+
 # Import RoleResponse and OrganizationResponse for type hints
 from app.schemas.role import RoleResponse
 from app.schemas.organization import OrganizationResponse

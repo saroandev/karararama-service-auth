@@ -9,6 +9,7 @@ from app.schemas.user import (
     UserResponse,
     UserWithRoles,
     UserDeleteResponse,
+    UserAssignToOrgRequest,
 )
 from app.schemas.role import (
     RoleBase,
@@ -53,6 +54,7 @@ __all__ = [
     "UserResponse",
     "UserWithRoles",
     "UserDeleteResponse",
+    "UserAssignToOrgRequest",
     # Role
     "RoleBase",
     "RoleCreate",
