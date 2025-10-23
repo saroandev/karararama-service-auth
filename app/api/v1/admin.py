@@ -120,6 +120,21 @@ async def assign_role_to_user(
             detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
 
+    # Prevent self-modification
+    if str(user.id) == str(current_admin.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kendi rolünüzü değiştiremezsiniz"
+        )
+
+    # Protect existing admins from role changes
+    target_user_roles = [r.name.lower() for r in user.roles]
+    if "admin" in target_user_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin rolündeki kullanıcıların rolleri değiştirilemez"
+        )
+
     # Get role by name
     role = await role_crud.get_by_name(db, name=role_name)
     if not role:
@@ -176,10 +191,10 @@ async def assign_role_to_user(
     return updated_user
 
 
-@router.delete("/users/{user_id}/roles/{role_id}", response_model=UserWithRoles)
+@router.delete("/users/{user_id}/roles/{role_name}", response_model=UserWithRoles)
 async def remove_role_from_user(
     user_id: UUID,
-    role_id: UUID,
+    role_name: str,
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_role(["admin"]))
 ) -> User:
@@ -189,7 +204,7 @@ async def remove_role_from_user(
 
     Args:
         user_id: User ID
-        role_id: Role ID
+        role_name: Role name (e.g., 'admin', 'user', 'viewer')
         db: Database session
         current_admin: Current admin user
 
@@ -214,8 +229,23 @@ async def remove_role_from_user(
             detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
 
-    # Get role
-    role = await role_crud.get(db, id=role_id)
+    # Prevent self-removal
+    if str(user.id) == str(current_admin.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kendi rolünüzü kaldıramazsınız"
+        )
+
+    # Protect admin role from removal
+    target_user_roles = [r.name.lower() for r in user.roles]
+    if "admin" in target_user_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin rolündeki kullanıcıların rolleri kaldırılamaz"
+        )
+
+    # Get role by name
+    role = await role_crud.get_by_name(db, name=role_name)
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -437,6 +467,14 @@ async def remove_user_from_organization(
             detail="Sadece kendi organizasyonunuzdan kullanıcı çıkarabilirsiniz"
         )
 
+    # Protect admins from being removed from organization
+    user_roles = [r.name.lower() for r in user.roles]
+    if "admin" in user_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin kullanıcılar organizasyondan çıkarılamaz"
+        )
+
     # Remove all roles first
     for role in list(user.roles):
         await user_crud.remove_role(db, user=user, role=role)
@@ -512,6 +550,16 @@ async def update_user_status(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
+
+    # Protect admins from deactivation
+    user_with_roles = await user_crud.get_with_roles(db, id=user_id)
+    if user_with_roles:
+        target_user_roles = [r.name.lower() for r in user_with_roles.roles]
+        if "admin" in target_user_roles and not is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin kullanıcılar deaktif edilemez"
+            )
 
     # Update user status
     await user_crud.update(db, db_obj=user, obj_in={"is_active": is_active})
