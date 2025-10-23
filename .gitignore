@@ -63,3 +63,6 @@ dump.rdb
 # Docker
 *.env.docker
 docker-compose.override.yml
+
+#MD Files
+md_files/
