@@ -73,10 +73,10 @@ async def create_role(
     return role
 
 
-@router.post("/users/{user_id}/roles/{role_id}", response_model=UserWithRoles)
+@router.post("/users/{user_id}/roles/{role_name}", response_model=UserWithRoles)
 async def assign_role_to_user(
     user_id: UUID,
-    role_id: UUID,
+    role_name: str,
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_role(["admin"]))
 ) -> User:
@@ -88,7 +88,7 @@ async def assign_role_to_user(
 
     Args:
         user_id: User ID
-        role_id: Role ID
+        role_name: Role name (e.g., 'admin', 'user', 'viewer')
         db: Database session
         current_admin: Current admin user
 
@@ -120,8 +120,8 @@ async def assign_role_to_user(
             detail="Sadece kendi organizasyonunuzdaki kullanıcıları yönetebilirsiniz"
         )
 
-    # Get role
-    role = await role_crud.get(db, id=role_id)
+    # Get role by name
+    role = await role_crud.get_by_name(db, name=role_name)
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
