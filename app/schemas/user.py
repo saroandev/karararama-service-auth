@@ -18,7 +18,8 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     """Schema for creating a new user."""
-    full_name: str = Field(..., min_length=1, description="User's full name")
+    first_name: str = Field(..., min_length=1, description="User's first name")
+    last_name: str = Field(..., min_length=1, description="User's last name")
     email: EmailStr
     password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
     password_confirm: str = Field(..., min_length=6, description="Password confirmation")
@@ -26,13 +27,6 @@ class UserCreate(BaseModel):
     def validate_passwords(self) -> bool:
         """Check if passwords match."""
         return self.password == self.password_confirm
-
-    def get_first_last_name(self) -> tuple[str, str]:
-        """Split full_name into first_name and last_name."""
-        parts = self.full_name.strip().split(maxsplit=1)
-        if len(parts) == 1:
-            return parts[0], ""
-        return parts[0], parts[1]
 
 
 class UserUpdate(BaseModel):

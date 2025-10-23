@@ -37,7 +37,7 @@ async def register(
     Other roles require admin to assign organization.
 
     Args:
-        user_in: User registration data (full_name, email, password, password_confirm).
+        user_in: User registration data (first_name, last_name, email, password, password_confirm).
         db: Database session
 
     Returns:
@@ -61,9 +61,6 @@ async def register(
             detail="Bu e-posta adresi zaten kayıtlı"
         )
 
-    # Split full_name into first_name and last_name
-    first_name, last_name = user_in.get_first_last_name()
-
     # Hash password
     from app.core.security import password_handler
     hashed_password = password_handler.hash_password(user_in.password)
@@ -72,8 +69,8 @@ async def register(
     from app.models import User
     db_obj = User(
         email=user_in.email,
-        first_name=first_name,
-        last_name=last_name,
+        first_name=user_in.first_name,
+        last_name=user_in.last_name,
         password_hash=hashed_password
     )
     db.add(db_obj)
