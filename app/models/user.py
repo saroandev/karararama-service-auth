@@ -89,6 +89,12 @@ class User(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
         lazy="select"
     )
+    blacklisted_tokens = relationship(
+        "BlacklistedToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email})>"

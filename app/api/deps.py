@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import jwt_handler
-from app.crud import user_crud
+from app.crud import user_crud, blacklisted_token_crud
 from app.models import User
 
 # HTTP Bearer token scheme
@@ -33,9 +33,17 @@ async def get_current_user(
         Current user instance
 
     Raises:
-        HTTPException: If token is invalid or user not found
+        HTTPException: If token is invalid, blacklisted, or user not found
     """
     token = credentials.credentials
+
+    # Check if token is blacklisted
+    is_blacklisted = await blacklisted_token_crud.is_blacklisted(db, token)
+    if is_blacklisted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token iptal edildi. Lütfen tekrar giriş yapın."
+        )
 
     try:
         payload = jwt_handler.decode_token(token)

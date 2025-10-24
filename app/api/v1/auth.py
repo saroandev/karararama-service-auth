@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import jwt_handler
 from app.core.permissions import get_data_access_for_user, get_primary_role, calculate_remaining_credits
-from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud
+from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud
 from app.models import User
 from app.schemas import (
     LoginRequest,
@@ -19,7 +19,8 @@ from app.schemas import (
     UserResponse,
     OrganizationCreate,
 )
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, security
+from fastapi.security import HTTPAuthorizationCredentials
 
 router = APIRouter()
 
@@ -413,28 +414,50 @@ async def refresh_token(
 
 @router.post("/logout")
 async def logout(
-    refresh_data: RefreshTokenRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Logout user by revoking refresh token.
+    Logout user by blacklisting access token and revoking all refresh tokens.
+
+    Uses access token from Authorization header to:
+    1. Add the access token to blacklist (prevents further use)
+    2. Revoke all refresh tokens (logs out from all devices)
 
     Args:
-        refresh_data: Refresh token to revoke
+        credentials: HTTP Bearer credentials (access token)
         db: Database session
-        current_user: Current authenticated user
+        current_user: Current authenticated user (from access token)
 
     Returns:
-        Success message
+        Success message with logout details
     """
-    # Revoke the refresh token
-    revoked = await refresh_token_crud.revoke(db, refresh_data.refresh_token)
+    access_token = credentials.credentials
 
-    if not revoked:
+    # Decode token to get expiration time
+    try:
+        payload = jwt_handler.decode_token(access_token)
+        expires_at = datetime.fromtimestamp(payload.get("exp"))
+    except Exception:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Refresh token bulunamadı"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Geçersiz token"
         )
 
-    return {"message": "Başarıyla çıkış yapıldı"}
+    # Add access token to blacklist
+    await blacklisted_token_crud.add_to_blacklist(
+        db=db,
+        token=access_token,
+        user_id=current_user.id,
+        expires_at=expires_at,
+        reason="logout"
+    )
+
+    # Revoke all user's refresh tokens
+    revoked_count = await refresh_token_crud.revoke_all_user_tokens(db, current_user.id)
+
+    return {
+        "message": "Başarıyla çıkış yapıldı",
+        "sessions_terminated": revoked_count
+    }
