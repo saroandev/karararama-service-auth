@@ -1,7 +1,9 @@
 """
 Authentication endpoints: login, register, refresh token.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
+import random
+import string
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +25,11 @@ from app.api.deps import get_current_active_user, security
 from fastapi.security import HTTPAuthorizationCredentials
 
 router = APIRouter()
+
+
+def generate_verification_code() -> str:
+    """Generate a 6-digit verification code."""
+    return ''.join(random.choices(string.digits, k=6))
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -138,6 +145,13 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Hesap aktif değil"
+        )
+
+    # Check if email is verified
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lütfen e-posta adresinizi doğrulayın"
         )
 
     # Check if user has at least one role
@@ -460,4 +474,45 @@ async def logout(
     return {
         "message": "Başarıyla çıkış yapıldı",
         "sessions_terminated": revoked_count
+    }
+
+
+@router.post("/verify-email/{email}")
+async def verify_email(
+    email: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Mark user's email as verified.
+
+    This endpoint is called by CRM after user verifies their email.
+    CRM handles verification code generation and validation.
+
+    Args:
+        email: User's email address
+        db: Database session
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: If user not found
+    """
+    # Get user by email
+    user = await user_crud.get_by_email(db, email=email)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı"
+        )
+
+    # Mark as verified
+    user.is_verified = True
+    await db.commit()
+
+    return {
+        "message": "E-posta başarıyla doğrulandı",
+        "email": email,
+        "is_verified": True
     }

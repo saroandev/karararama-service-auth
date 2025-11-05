@@ -83,8 +83,8 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         # Hash password
         hashed_password = password_handler.hash_password(obj_in.password)
 
-        # Create user dict without password
-        user_data = obj_in.model_dump(exclude={"password"})
+        # Create user dict without password and password_confirm (validation only)
+        user_data = obj_in.model_dump(exclude={"password", "password_confirm"})
         user_data["password_hash"] = hashed_password
 
         db_obj = User(**user_data)

@@ -394,12 +394,15 @@ async def seed_default_admin(db: AsyncSession, organization_id, admin_role_id):
         user_in = UserCreate(
             email="admin@onedocs.com",
             password="admin123",  # Default password (min 6 chars)
+            password_confirm="admin123",
             first_name="Admin",
-            last_name="User",
-            is_active=True,
-            is_verified=True
+            last_name="User"
         )
         user = await user_crud.create(db, obj_in=user_in)
+
+        # Set admin user as active and verified
+        user.is_active = True
+        user.is_verified = True
 
         # Assign organization
         user.organization_id = organization_id
