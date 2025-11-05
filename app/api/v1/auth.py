@@ -69,45 +69,19 @@ async def register(
             detail="Bu e-posta adresi zaten kayıtlı"
         )
 
-    # Hash password
-    from app.core.security import password_handler
-    hashed_password = password_handler.hash_password(user_in.password)
-
-    # Create user directly
-    from app.models import User
-    db_obj = User(
-        email=user_in.email,
-        first_name=user_in.first_name,
-        last_name=user_in.last_name,
-        password_hash=hashed_password
-    )
-    db.add(db_obj)
-    await db.commit()
-    await db.refresh(db_obj)
+    # Create user using CRUD (handles hashing and default values)
+    user = await user_crud.create(db, obj_in=user_in)
 
     # Assign default 'guest' role
-    from app.models import Role
-    from sqlalchemy import select
-    result = await db.execute(
-        select(Role).where(Role.name == "guest")
-    )
-    guest_role = result.scalar_one_or_none()
+    from app.crud import role_crud
+    guest_role = await role_crud.get_by_name(db, name="guest")
 
     if guest_role:
-        # Reload user with roles relationship
-        from sqlalchemy.orm import selectinload
-        result = await db.execute(
-            select(User)
-            .where(User.id == db_obj.id)
-            .options(selectinload(User.roles))
-        )
-        user_with_roles = result.scalar_one()
-        user_with_roles.roles.append(guest_role)
-        await db.commit()
+        await user_crud.add_role(db, user=user, role=guest_role)
 
-    # Return user without roles loaded (for response serialization)
-    await db.refresh(db_obj)
-    return db_obj
+    # Reload user with all relationships
+    user = await user_crud.get_with_roles(db, id=user.id)
+    return user
 
 
 @router.post("/login", response_model=TokenResponse)

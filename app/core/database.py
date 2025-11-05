@@ -17,6 +17,7 @@ engine = create_async_engine(
     echo=settings.DEBUG,  # Log SQL queries in debug mode
     future=True,
     pool_pre_ping=True,  # Verify connections before using
+    isolation_level="READ COMMITTED",  # Ensure read-write transactions
 )
 
 # Create async session factory
@@ -45,14 +46,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             ...
     """
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+        async with session.begin():
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
 
 
 async def init_db() -> None:
