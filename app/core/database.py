@@ -46,12 +46,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             ...
     """
     async with AsyncSessionLocal() as session:
-        async with session.begin():
-            try:
-                yield session
-            except Exception:
-                await session.rollback()
-                raise
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 
 async def init_db() -> None:
