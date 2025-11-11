@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import jwt_handler
 from app.crud import user_crud, blacklisted_token_crud
+from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
 
 # HTTP Bearer token scheme

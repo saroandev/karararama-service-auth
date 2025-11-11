@@ -547,3 +547,60 @@ async def activity_watch_login(
         token=plain_token,
         token_type="activity_watch"
     )
+
+
+@router.post("/activity-watch-verify", status_code=status.HTTP_200_OK)
+async def activity_watch_verify(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    """
+    Verify Activity Watch token.
+
+    This endpoint validates the Activity Watch token sent in the Authorization header.
+    Used by the desktop application to check if the token is still valid.
+
+    Args:
+        credentials: Bearer token from Authorization header
+        db: Database session
+
+    Returns:
+        Success message with user info if token is valid
+
+    Raises:
+        HTTPException: If token is invalid or user is not active
+    """
+    token = credentials.credentials
+
+    # Verify token exists in database
+    token_record = await activity_watch_token_crud.verify_token(db, token)
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Geçersiz token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Get user
+    user = await user_crud.get_with_roles(db, id=token_record.user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı"
+        )
+
+    # Check if user is active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kullanıcı hesabı aktif değil"
+        )
+
+    # Update last_used_at
+    await activity_watch_token_crud.update_last_used(db, token_record)
+
+    return {
+        "is_active": user.is_active
+    }
