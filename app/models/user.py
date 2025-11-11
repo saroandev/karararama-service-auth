@@ -95,6 +95,13 @@ class User(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
         lazy="select"
     )
+    activity_watch_token = relationship(
+        "ActivityWatchToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select",
+        uselist=False  # One-to-one relationship
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email})>"

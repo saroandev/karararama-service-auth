@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.security import jwt_handler
 from app.core.permissions import get_data_access_for_user, get_primary_role, calculate_remaining_credits
 from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud
+from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
 from app.schemas import (
     LoginRequest,
@@ -21,6 +22,7 @@ from app.schemas import (
     UserResponse,
     OrganizationCreate,
 )
+from app.schemas.activity_watch import ActivityWatchLoginRequest, ActivityWatchTokenResponse
 from app.api.deps import get_current_active_user, security
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -490,3 +492,58 @@ async def verify_email(
         "email": email,
         "is_verified": True
     }
+
+
+@router.post("/activity-watch-login", response_model=ActivityWatchTokenResponse)
+async def activity_watch_login(
+    login_data: ActivityWatchLoginRequest,
+    db: AsyncSession = Depends(get_db)
+) -> ActivityWatchTokenResponse:
+    """
+    Login endpoint for Activity Watch desktop application.
+
+    This endpoint provides a long-lived token (no expiration) for the Activity Watch
+    desktop application. Each user can have only one active token at a time.
+    New logins will replace the existing token.
+
+    Args:
+        login_data: Login credentials (email and password)
+        db: Database session
+
+    Returns:
+        Long-lived Activity Watch token
+
+    Raises:
+        HTTPException: If credentials are invalid or user is not active
+    """
+    # Authenticate user
+    user = await user_crud.authenticate(
+        db,
+        email=login_data.email,
+        password=login_data.password
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email veya şifre hatalı",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Check if user is active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kullanıcı hesabı aktif değil"
+        )
+
+    # Create or update Activity Watch token for this user
+    plain_token, _ = await activity_watch_token_crud.create_or_update(
+        db,
+        user_id=user.id
+    )
+
+    return ActivityWatchTokenResponse(
+        token=plain_token,
+        token_type="activity_watch"
+    )

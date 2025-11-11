@@ -8,6 +8,7 @@ from app.models.permission import Permission
 from app.models.refresh_token import RefreshToken
 from app.models.blacklisted_token import BlacklistedToken
 from app.models.usage_log import UsageLog
+from app.models.activity_watch_token import ActivityWatchToken
 
 __all__ = [
     "Organization",
@@ -17,6 +18,7 @@ __all__ = [
     "RefreshToken",
     "BlacklistedToken",
     "UsageLog",
+    "ActivityWatchToken",
     "user_roles",
     "role_permissions",
 ]
