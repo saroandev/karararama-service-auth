@@ -22,7 +22,12 @@ from app.schemas import (
     UserResponse,
     OrganizationCreate,
 )
-from app.schemas.activity_watch import ActivityWatchLoginRequest, ActivityWatchTokenResponse
+from app.schemas.activity_watch import (
+    ActivityWatchLoginRequest,
+    ActivityWatchTokenResponse,
+    ActivityWatchVerifyResponse,
+    ErrorResponse
+)
 from app.api.deps import get_current_active_user, security
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -494,7 +499,32 @@ async def verify_email(
     }
 
 
-@router.post("/activity-watch-login", response_model=ActivityWatchTokenResponse)
+@router.post(
+    "/activity-watch-login",
+    response_model=ActivityWatchTokenResponse,
+    responses={
+        200: {
+            "description": "Login başarılı, token döndürüldü",
+            "model": ActivityWatchTokenResponse
+        },
+        400: {
+            "description": "Geçersiz istek (email formatı hatalı veya şifre çok kısa)",
+            "model": ErrorResponse
+        },
+        401: {
+            "description": "Email veya şifre hatalı",
+            "model": ErrorResponse
+        },
+        403: {
+            "description": "Kullanıcı hesabı aktif değil",
+            "model": ErrorResponse
+        },
+        500: {
+            "description": "Token oluşturma hatası",
+            "model": ErrorResponse
+        }
+    }
+)
 async def activity_watch_login(
     login_data: ActivityWatchLoginRequest,
     db: AsyncSession = Depends(get_db)
@@ -504,7 +534,13 @@ async def activity_watch_login(
 
     This endpoint provides a long-lived token (no expiration) for the Activity Watch
     desktop application. Each user can have only one active token at a time.
-    New logins will replace the existing token.
+    New logins will return the existing token.
+
+    **Error Scenarios:**
+    - `400`: Email formatı hatalı veya şifre çok kısa (minimum 6 karakter)
+    - `401`: Email veya şifre yanlış
+    - `403`: Kullanıcı hesabı aktif değil
+    - `500`: Token oluşturma sırasında beklenmeyen hata
 
     Args:
         login_data: Login credentials (email and password)
@@ -512,9 +548,6 @@ async def activity_watch_login(
 
     Returns:
         Long-lived Activity Watch token
-
-    Raises:
-        HTTPException: If credentials are invalid or user is not active
     """
     # Authenticate user
     user = await user_crud.authenticate(
@@ -538,10 +571,16 @@ async def activity_watch_login(
         )
 
     # Create or update Activity Watch token for this user
-    plain_token, _ = await activity_watch_token_crud.create_or_update(
-        db,
-        user_id=user.id
-    )
+    try:
+        plain_token, _ = await activity_watch_token_crud.create_or_update(
+            db,
+            user_id=user.id
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Token oluşturulurken hata oluştu: {str(e)}"
+        )
 
     return ActivityWatchTokenResponse(
         token=plain_token,
@@ -549,31 +588,67 @@ async def activity_watch_login(
     )
 
 
-@router.post("/activity-watch-verify", status_code=status.HTTP_200_OK)
+@router.post(
+    "/activity-watch-verify",
+    response_model=ActivityWatchVerifyResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Token geçerli",
+            "model": ActivityWatchVerifyResponse
+        },
+        401: {
+            "description": "Token geçersiz veya decrypt edilemedi",
+            "model": ErrorResponse
+        },
+        403: {
+            "description": "Kullanıcı hesabı aktif değil",
+            "model": ErrorResponse
+        },
+        404: {
+            "description": "Token'a ait kullanıcı bulunamadı",
+            "model": ErrorResponse
+        },
+        500: {
+            "description": "Token doğrulama sırasında beklenmeyen hata",
+            "model": ErrorResponse
+        }
+    }
+)
 async def activity_watch_verify(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
-) -> dict:
+) -> ActivityWatchVerifyResponse:
     """
     Verify Activity Watch token.
 
     This endpoint validates the Activity Watch token sent in the Authorization header.
     Used by the desktop application to check if the token is still valid.
 
+    **Error Scenarios:**
+    - `401`: Token geçersiz, bulunamadı veya decrypt edilemedi
+    - `403`: Kullanıcı hesabı aktif değil
+    - `404`: Token'a ait kullanıcı veritabanında bulunamadı
+    - `500`: Token doğrulama sırasında beklenmeyen hata
+
     Args:
         credentials: Bearer token from Authorization header
         db: Database session
 
     Returns:
-        Success message with user info if token is valid
-
-    Raises:
-        HTTPException: If token is invalid or user is not active
+        User active status
     """
     token = credentials.credentials
 
-    # Verify token exists in database
-    token_record = await activity_watch_token_crud.verify_token(db, token)
+    # Verify token exists in database and decrypt it
+    try:
+        token_record = await activity_watch_token_crud.verify_token(db, token)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token decrypt edilemedi: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     if not token_record:
         raise HTTPException(
@@ -583,7 +658,13 @@ async def activity_watch_verify(
         )
 
     # Get user
-    user = await user_crud.get_with_roles(db, id=token_record.user_id)
+    try:
+        user = await user_crud.get_with_roles(db, id=token_record.user_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Kullanıcı bilgisi alınırken hata oluştu: {str(e)}"
+        )
 
     if not user:
         raise HTTPException(
@@ -599,8 +680,12 @@ async def activity_watch_verify(
         )
 
     # Update last_used_at
-    await activity_watch_token_crud.update_last_used(db, token_record)
+    try:
+        await activity_watch_token_crud.update_last_used(db, token_record)
+    except Exception:
+        # Don't fail if last_used_at update fails, just log it
+        pass
 
-    return {
-        "is_active": user.is_active
-    }
+    return ActivityWatchVerifyResponse(
+        is_active=user.is_active
+    )
