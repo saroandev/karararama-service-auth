@@ -130,7 +130,18 @@ async def register(
 
     # Process invitation if exists
     if invitation:
-        # Assign organization from invitation
+        # Create membership in organization_members table
+        from app.crud import organization_member_crud
+
+        await organization_member_crud.create(
+            db,
+            user_id=user.id,
+            organization_id=invitation.organization_id,
+            role=invitation.role,
+            is_primary=True  # First organization is always primary for new users
+        )
+
+        # Set organization as user's primary org
         user.organization_id = invitation.organization_id
         db.add(user)
         await db.commit()
@@ -265,6 +276,21 @@ async def login(
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
     remaining_credits = calculate_remaining_credits(user, today_usage)
 
+    # Get all organizations user belongs to
+    from app.crud import organization_member_crud
+    memberships = await organization_member_crud.get_user_memberships(db, user_id=user.id)
+
+    organizations = []
+    for membership in memberships:
+        org = membership.organization
+        organizations.append({
+            "id": str(org.id),
+            "name": org.name,
+            "role": membership.role,
+            "is_primary": membership.is_primary,
+            "is_owner": org.owner_id == user.id
+        })
+
     # Create token payload
     token_data = {
         "sub": str(user.id),
@@ -279,7 +305,8 @@ async def login(
             "daily_query_limit": user.daily_query_limit,
             "monthly_query_limit": user.monthly_query_limit,
             "daily_document_limit": user.daily_document_upload_limit,
-        }
+        },
+        "organizations": organizations  # NEW: All organizations with roles
     }
 
     # Create tokens
@@ -462,6 +489,21 @@ async def refresh_token(
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
     remaining_credits = calculate_remaining_credits(user, today_usage)
 
+    # Get all organizations user belongs to
+    from app.crud import organization_member_crud
+    memberships = await organization_member_crud.get_user_memberships(db, user_id=user.id)
+
+    organizations = []
+    for membership in memberships:
+        org = membership.organization
+        organizations.append({
+            "id": str(org.id),
+            "name": org.name,
+            "role": membership.role,
+            "is_primary": membership.is_primary,
+            "is_owner": org.owner_id == user.id
+        })
+
     # Create new token payload
     token_data = {
         "sub": str(user.id),
@@ -476,7 +518,8 @@ async def refresh_token(
             "daily_query_limit": user.daily_query_limit,
             "monthly_query_limit": user.monthly_query_limit,
             "daily_document_limit": user.daily_document_upload_limit,
-        }
+        },
+        "organizations": organizations  # NEW: All organizations with roles
     }
 
     # Create new tokens

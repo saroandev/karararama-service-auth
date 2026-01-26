@@ -84,6 +84,12 @@ class User(Base, UUIDMixin, TimestampMixin):
         foreign_keys=[organization_id],
         lazy="selectin"
     )
+    memberships = relationship(
+        "OrganizationMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
     roles = relationship(
         "Role",
         secondary=user_roles,
@@ -124,3 +130,22 @@ class User(Base, UUIDMixin, TimestampMixin):
     def has_unlimited_queries(self) -> bool:
         """Check if user has unlimited query quota."""
         return self.daily_query_limit is None
+
+    def get_role_in_org(self, org_id: UUID) -> str:
+        """Get user's role in a specific organization."""
+        for membership in self.memberships:
+            if membership.organization_id == org_id:
+                return membership.role
+        return None
+
+    def get_primary_membership(self):
+        """Get user's primary organization membership."""
+        for membership in self.memberships:
+            if membership.is_primary:
+                return membership
+        return None
+
+    def is_owner_of_org(self, org_id: UUID) -> bool:
+        """Check if user is owner of a specific organization."""
+        role = self.get_role_in_org(org_id)
+        return role == "owner"

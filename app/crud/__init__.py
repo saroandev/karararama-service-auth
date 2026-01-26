@@ -9,6 +9,7 @@ from app.crud.usage import CRUDUsage, usage_crud
 from app.crud.refresh_token import CRUDRefreshToken, refresh_token_crud
 from app.crud.blacklisted_token_crud import CRUDBlacklistedToken, blacklisted_token_crud
 from app.crud.invitation import CRUDInvitation, invitation_crud
+from app.crud.organization_member import CRUDOrganizationMember, organization_member_crud
 from app.crud import email_verification
 
 __all__ = [
@@ -28,5 +29,7 @@ __all__ = [
     "blacklisted_token_crud",
     "CRUDInvitation",
     "invitation_crud",
+    "CRUDOrganizationMember",
+    "organization_member_crud",
     "email_verification",
 ]

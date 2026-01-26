@@ -6,12 +6,23 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash
-from app.crud import user_crud
-from app.models import User
-from app.schemas import UserResponse, UserUpdate, UserWithRoles, UserDeleteResponse, UserUpdatePassword
+from app.crud import user_crud, organization_member_crud
+from app.models import User, Organization
+from app.schemas import (
+    UserResponse,
+    UserUpdate,
+    UserWithRoles,
+    UserDeleteResponse,
+    UserUpdatePassword,
+    UserOrganizationsListResponse,
+    UserOrganizationResponse,
+    SetPrimaryOrganizationResponse
+)
 from app.api.deps import get_current_active_user, require_role
 
 router = APIRouter()
@@ -201,4 +212,138 @@ async def delete_user(
         id=user.id,
         email=user.email,
         message="Kullanıcı başarıyla silindi"
+    )
+
+
+@router.get("/me/organizations", response_model=UserOrganizationsListResponse)
+async def get_user_organizations(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+) -> UserOrganizationsListResponse:
+    """
+    Get all organizations the current user belongs to.
+
+    Returns list of organizations with:
+    - Organization details
+    - User's role in each organization
+    - Whether it's their primary/active organization
+    - Whether they own the organization
+
+    Args:
+        db: Database session
+        current_user: Current authenticated user
+
+    Returns:
+        List of user's organizations with membership details
+    """
+    # Get all memberships with organization details loaded
+    memberships = await organization_member_crud.get_user_memberships(
+        db,
+        user_id=current_user.id
+    )
+
+    # Role display names mapping
+    role_names = {
+        "owner": "Organizasyon Sahibi",
+        "org-admin": "Organizasyon Yöneticisi",
+        "managing-lawyer": "Yönetici Avukat",
+        "lawyer": "Avukat",
+        "trainee": "Stajyer Avukat",
+        "member": "Üye",
+    }
+
+    # Build response
+    organizations = []
+    primary_org_id = None
+    owned_org_id = None
+
+    for membership in memberships:
+        org = membership.organization
+
+        # Check if user owns this organization
+        is_owner = (org.owner_id == current_user.id)
+
+        if is_owner:
+            owned_org_id = org.id
+
+        if membership.is_primary:
+            primary_org_id = org.id
+
+        organizations.append(
+            UserOrganizationResponse(
+                id=membership.id,
+                organization_id=org.id,
+                organization_name=org.name,
+                organization_type=org.organization_type,
+                organization_size=org.organization_size,
+                role=membership.role,
+                role_display_name=role_names.get(membership.role, membership.role),
+                is_primary=membership.is_primary,
+                is_owner=is_owner,
+                joined_at=membership.joined_at
+            )
+        )
+
+    return UserOrganizationsListResponse(
+        organizations=organizations,
+        primary_organization_id=primary_org_id,
+        owned_organization_id=owned_org_id
+    )
+
+
+@router.post("/me/organizations/{organization_id}/set-primary", response_model=SetPrimaryOrganizationResponse)
+async def set_primary_organization(
+    organization_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+) -> SetPrimaryOrganizationResponse:
+    """
+    Set a different organization as the user's primary/active organization.
+
+    The user must be a member of the organization to set it as primary.
+    This will update:
+    - All memberships: set is_primary=False
+    - Target membership: set is_primary=True
+    - User.organization_id: set to new organization
+
+    Args:
+        organization_id: ID of organization to set as primary
+        db: Database session
+        current_user: Current authenticated user
+
+    Returns:
+        Success message with organization details
+
+    Raises:
+        HTTPException: If user is not a member of the organization
+    """
+    # Verify user is member of this organization
+    membership = await organization_member_crud.get_membership(
+        db,
+        user_id=current_user.id,
+        organization_id=organization_id
+    )
+
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bu organizasyonun üyesi değilsiniz"
+        )
+
+    # Set as primary (also updates user.organization_id)
+    updated_membership = await organization_member_crud.set_primary(
+        db,
+        user_id=current_user.id,
+        organization_id=organization_id
+    )
+
+    # Get organization details
+    stmt = select(Organization).where(Organization.id == organization_id)
+    result = await db.execute(stmt)
+    organization = result.scalar_one()
+
+    return SetPrimaryOrganizationResponse(
+        message="Aktif organizasyon başarıyla değiştirildi",
+        organization_id=organization.id,
+        organization_name=organization.name
     )

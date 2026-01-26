@@ -80,16 +80,41 @@ async def accept_invitation(
     user = await user_crud.get_by_email(db, email=invitation.email)
 
     if user:
-        # User exists - assign organization and role
-        # Load user with roles
-        stmt = select(User).where(User.id == user.id).options(selectinload(User.roles))
+        # User exists - add them to the organization via membership
+        # Load user with roles and memberships
+        stmt = select(User).where(User.id == user.id).options(
+            selectinload(User.roles),
+            selectinload(User.memberships)
+        )
         result = await db.execute(stmt)
         user_with_roles = result.scalar_one()
 
-        # Update user's organization
-        user_with_roles.organization_id = invitation.organization_id
-        db.add(user_with_roles)
-        await db.commit()
+        # Check if membership already exists
+        from app.crud import organization_member_crud
+        existing_membership = await organization_member_crud.get_membership(
+            db,
+            user_id=user.id,
+            organization_id=invitation.organization_id
+        )
+
+        if not existing_membership:
+            # Create new membership - don't replace their current organization!
+            # Set as primary only if user has no primary organization
+            has_primary = user_with_roles.organization_id is not None
+
+            await organization_member_crud.create(
+                db,
+                user_id=user.id,
+                organization_id=invitation.organization_id,
+                role=invitation.role,
+                is_primary=not has_primary  # Primary only if no existing org
+            )
+
+            # If user had no primary org, set this as their primary
+            if not has_primary:
+                user_with_roles.organization_id = invitation.organization_id
+                db.add(user_with_roles)
+                await db.commit()
 
         # Get the role from invitation
         role = await role_crud.get_by_name(db, name=invitation.role)

@@ -63,6 +63,13 @@ from app.schemas.email_verification import (
     ResendVerificationEmailRequest,
     ResendVerificationEmailResponse,
 )
+from app.schemas.organization_member import (
+    OrganizationMembershipResponse,
+    UserOrganizationResponse,
+    UserOrganizationsListResponse,
+    SetPrimaryOrganizationRequest,
+    SetPrimaryOrganizationResponse,
+)
 
 __all__ = [
     # User
@@ -116,4 +123,10 @@ __all__ = [
     "VerifyEmailCodeResponse",
     "ResendVerificationEmailRequest",
     "ResendVerificationEmailResponse",
+    # Organization Member
+    "OrganizationMembershipResponse",
+    "UserOrganizationResponse",
+    "UserOrganizationsListResponse",
+    "SetPrimaryOrganizationRequest",
+    "SetPrimaryOrganizationResponse",
 ]

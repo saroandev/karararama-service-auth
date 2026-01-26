@@ -11,6 +11,7 @@ from app.models.usage_log import UsageLog
 from app.models.activity_watch_token import ActivityWatchToken
 from app.models.invitation import Invitation, InvitationStatus
 from app.models.email_verification import EmailVerification
+from app.models.organization_member import OrganizationMember
 
 __all__ = [
     "Organization",
@@ -24,6 +25,7 @@ __all__ = [
     "Invitation",
     "InvitationStatus",
     "EmailVerification",
+    "OrganizationMember",
     "user_roles",
     "role_permissions",
 ]

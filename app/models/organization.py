@@ -12,7 +12,8 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     """
     Organization model for multi-tenant data isolation.
 
-    Each user belongs to one organization. Organizations own:
+    Users can belong to multiple organizations with different roles in each.
+    Each user has one primary/active organization. Organizations own:
     - Shared data (accessible to all members)
     - Individual user data (private to each user)
 
@@ -21,8 +22,9 @@ class Organization(Base, UUIDMixin, TimestampMixin):
         name: Organization name
         owner_id: User ID of the organization owner
         is_active: Whether the organization is active
-        users: List of users in this organization
+        users: List of users with this as their primary organization
         owner: User who owns this organization
+        memberships: All user memberships in this organization
     """
 
     __tablename__ = "organizations"
@@ -44,6 +46,13 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     owner = relationship(
         "User",
         foreign_keys=[owner_id],
+        lazy="select"
+    )
+
+    memberships = relationship(
+        "OrganizationMember",
+        back_populates="organization",
+        cascade="all, delete-orphan",
         lazy="select"
     )
 

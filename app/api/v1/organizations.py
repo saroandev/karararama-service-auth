@@ -80,7 +80,18 @@ async def create_organization(
     await db.commit()
     await db.refresh(organization)
 
-    # Update user's organization_id
+    # Create owner membership in organization_members table
+    from app.crud import organization_member_crud
+
+    await organization_member_crud.create(
+        db,
+        user_id=user.id,
+        organization_id=organization.id,
+        role="owner",
+        is_primary=True  # Organization they create is always their primary
+    )
+
+    # Update user's organization_id (for backward compatibility)
     user.organization_id = organization.id
     db.add(user)
     await db.commit()
@@ -187,39 +198,36 @@ async def get_organization_members(
             detail="Organizasyon bulunamadı"
         )
 
-    # Get all users in the organization
-    stmt = select(User).where(User.organization_id == current_user.organization_id)
+    # Get all members in the organization from organization_members table
+    from app.crud import organization_member_crud
+    from app.models import OrganizationMember
+
+    stmt = (
+        select(OrganizationMember)
+        .where(OrganizationMember.organization_id == current_user.organization_id)
+        .options(selectinload(OrganizationMember.user))
+    )
     result = await db.execute(stmt)
-    org_users = result.scalars().all()
+    memberships = result.scalars().all()
 
     # Build member list with organization-specific roles
     members = []
-    for user in org_users:
-        # Get user's roles for this organization
-        # Note: user_roles table has organization_id column
-        stmt = (
-            select(User)
-            .where(User.id == user.id)
-            .options(selectinload(User.roles))
-        )
-        result = await db.execute(stmt)
-        user_with_roles = result.scalar_one()
+    for membership in memberships:
+        user = membership.user
 
-        # For now, get the primary role (first role in the list)
-        # TODO: Filter roles by organization_id when role assignment is org-specific
-        primary_role = user_with_roles.roles[0].name if user_with_roles.roles else "guest"
-        role_display = ROLE_DISPLAY_NAMES.get(primary_role, primary_role.title())
+        # Role comes from organization_members table
+        role_display = ROLE_DISPLAY_NAMES.get(membership.role, membership.role.title())
 
         members.append(OrganizationMemberResponse(
             id=user.id,
             first_name=user.first_name,
             last_name=user.last_name,
             email=user.email,
-            role=primary_role,
+            role=membership.role,
             role_display_name=role_display,
             is_owner=str(user.id) == str(organization.owner_id),
             is_verified=user.is_verified,
-            joined_at=user.created_at
+            joined_at=membership.joined_at  # Use membership join date, not user creation date
         ))
 
     # Get pending invitations
@@ -449,6 +457,99 @@ async def invite_users_to_organization(
         )
 
     return created_invitations
+
+
+@router.delete("/me/members/{user_id}")
+async def remove_member_from_organization(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Remove a member from current user's organization.
+
+    Only organization owner can remove members.
+    Owner cannot remove themselves.
+
+    Args:
+        user_id: ID of the user to remove
+        db: Database session
+        current_user: Current authenticated user
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: If not authorized, user not found, or trying to remove owner
+    """
+    # Check if user has an organization
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcının organizasyonu yok"
+        )
+
+    # Get organization
+    organization = await organization_crud.get(db, id=current_user.organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı"
+        )
+
+    # Check if current user is the owner
+    is_owner = str(organization.owner_id) == str(current_user.id)
+
+    if not is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sadece organizasyon sahibi üye çıkarabilir"
+        )
+
+    # Check if trying to remove themselves
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kendinizi organizasyondan çıkaramazsınız"
+        )
+
+    # Get the membership
+    from app.crud import organization_member_crud
+
+    membership = await organization_member_crud.get_membership(
+        db,
+        user_id=user_id,
+        organization_id=current_user.organization_id
+    )
+
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bu organizasyonda bulunamadı"
+        )
+
+    # Cannot remove the owner
+    if membership.role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organizasyon sahibi çıkarılamaz"
+        )
+
+    # Remove the membership
+    await organization_member_crud.remove_member(
+        db,
+        user_id=user_id,
+        organization_id=current_user.organization_id
+    )
+
+    # Get user info for response
+    removed_user = await user_crud.get(db, id=user_id)
+
+    return {
+        "message": "Kullanıcı organizasyondan çıkarıldı",
+        "user_id": str(user_id),
+        "email": removed_user.email if removed_user else None
+    }
 
 
 @router.get("/{organization_id}", response_model=OrganizationResponse)
