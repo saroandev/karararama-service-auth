@@ -14,6 +14,7 @@ class UserBase(BaseModel):
     email: EmailStr
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -21,8 +22,13 @@ class UserCreate(BaseModel):
     first_name: str = Field(..., min_length=1, description="User's first name")
     last_name: str = Field(..., min_length=1, description="User's last name")
     email: EmailStr
-    password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
-    password_confirm: str = Field(..., min_length=6, description="Password confirmation")
+    phone: Optional[str] = Field(None, max_length=20, description="Phone number")
+    password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+    password_confirm: str = Field(..., min_length=8, description="Password confirmation")
+    coupon_code: Optional[str] = Field(None, max_length=50, description="Coupon or referral code")
+    agree_kvkk: bool = Field(True, description="KVKK agreement")
+    agree_cookies: bool = Field(True, description="Cookie policy agreement")
+    agree_privacy: bool = Field(True, description="Privacy policy agreement")
 
     def validate_passwords(self) -> bool:
         """Check if passwords match."""

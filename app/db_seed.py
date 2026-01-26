@@ -211,6 +211,45 @@ async def seed_roles(db: AsyncSession, permissions: dict):
             ]  # Admin has all permissions
         },
         {
+            "name": "owner",
+            "description": "Organization owner - organizasyon sahibi (tam yetki)",
+            "default_daily_query_limit": None,  # Sınırsız
+            "default_monthly_query_limit": None,
+            "default_daily_document_limit": None,
+            "default_max_document_size_mb": 100,
+            "permissions": [
+                # Auth
+                "auth:login", "auth:logout", "auth:reset_password", "auth:manage_2fa",
+                # Users
+                "users:read", "users:update", "users:delete", "users:change_password",
+                "users:upload_avatar", "users:manage_notifications", "users:manage_api_keys",
+                # Documents - Full access
+                "documents:*",
+                # Research - Full access
+                "research:*",
+                # Usage - Full access
+                "usage:*",
+                # Billing - Full access
+                "billing:*",
+                # Notifications
+                "notifications:*",
+                # Workspaces - Full control
+                "workspaces:*",
+                # Sharing - Full control
+                "sharing:*",
+                # Comments
+                "comments:*",
+                # Integrations - Full access
+                "integrations:*",
+                # Data
+                "data:*",
+                # Security - Full access
+                "security:*",
+                # Admin - View only (cannot manage other admins)
+                "admin:view_users", "admin:view_analytics", "admin:view_logs"
+            ]
+        },
+        {
             "name": "premium",
             "description": "Premium kullanıcı - gelişmiş özellikler",
             "default_daily_query_limit": 500,

@@ -15,7 +15,10 @@ class OrganizationBase(BaseModel):
 
 class OrganizationCreate(OrganizationBase):
     """Organization creation schema."""
-    owner_id: Optional[UUID] = None
+    owner_email: str
+    organization_type: Optional[str] = None  # "law-firm", "legal-department", "other"
+    organization_size: Optional[str] = None  # "1-9", "10-49", "50-200", "200+"
+    description: Optional[str] = None
 
 
 class OrganizationUpdate(BaseModel):

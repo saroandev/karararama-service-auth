@@ -44,6 +44,22 @@ from app.schemas.organization import (
     OrganizationResponse,
     OrganizationWithStats,
 )
+from app.schemas.invitation import (
+    InvitationBase,
+    InvitationCreate,
+    InvitationBatchCreate,
+    InvitationAccept,
+    InvitationResponse,
+    InvitationPublicResponse,
+)
+from app.schemas.email_verification import (
+    SendVerificationEmailRequest,
+    SendVerificationEmailResponse,
+    VerifyEmailCodeRequest,
+    VerifyEmailCodeResponse,
+    ResendVerificationEmailRequest,
+    ResendVerificationEmailResponse,
+)
 
 __all__ = [
     # User
@@ -83,4 +99,18 @@ __all__ = [
     "OrganizationUpdate",
     "OrganizationResponse",
     "OrganizationWithStats",
+    # Invitation
+    "InvitationBase",
+    "InvitationCreate",
+    "InvitationBatchCreate",
+    "InvitationAccept",
+    "InvitationResponse",
+    "InvitationPublicResponse",
+    # Email Verification
+    "SendVerificationEmailRequest",
+    "SendVerificationEmailResponse",
+    "VerifyEmailCodeRequest",
+    "VerifyEmailCodeResponse",
+    "ResendVerificationEmailRequest",
+    "ResendVerificationEmailResponse",
 ]

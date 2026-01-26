@@ -51,11 +51,18 @@ class User(Base, UUIDMixin, TimestampMixin):
     password_hash = Column(String(255), nullable=False)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
+    phone = Column(String(20), nullable=True)
+    coupon_code = Column(String(50), nullable=True)
 
     # Account Status
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     is_verified = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
+
+    # Legal Consents (GDPR Compliance)
+    kvkk_consent_at = Column(DateTime, nullable=True)
+    cookie_consent_at = Column(DateTime, nullable=True)
+    privacy_consent_at = Column(DateTime, nullable=True)
 
     # Quota Limits (NULL = unlimited, typically for admins)
     daily_query_limit = Column(Integer, nullable=True)

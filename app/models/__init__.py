@@ -9,6 +9,8 @@ from app.models.refresh_token import RefreshToken
 from app.models.blacklisted_token import BlacklistedToken
 from app.models.usage_log import UsageLog
 from app.models.activity_watch_token import ActivityWatchToken
+from app.models.invitation import Invitation, InvitationStatus
+from app.models.email_verification import EmailVerification
 
 __all__ = [
     "Organization",
@@ -19,6 +21,9 @@ __all__ = [
     "BlacklistedToken",
     "UsageLog",
     "ActivityWatchToken",
+    "Invitation",
+    "InvitationStatus",
+    "EmailVerification",
     "user_roles",
     "role_permissions",
 ]

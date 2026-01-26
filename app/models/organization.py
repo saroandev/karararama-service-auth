@@ -29,6 +29,8 @@ class Organization(Base, UUIDMixin, TimestampMixin):
 
     name = Column(String(255), nullable=False)
     owner_id = Column(UUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_type = Column(String(50), nullable=True)  # "law-firm", "legal-department", "other"
+    organization_size = Column(String(20), nullable=True)  # "1-9", "10-49", "50-200", "200+"
     is_active = Column(Boolean, default=True, nullable=False, index=True)
 
     # Relationships
