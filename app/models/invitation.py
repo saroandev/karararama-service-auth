@@ -43,7 +43,16 @@ class Invitation(Base, UUIDMixin, TimestampMixin):
     invited_by_user_id = Column(UUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(50), nullable=False, default="member")
     token = Column(String(255), nullable=False, unique=True, index=True)
-    status = Column(SQLEnum(InvitationStatus), nullable=False, default=InvitationStatus.PENDING, index=True)
+    status = Column(
+        SQLEnum(
+            InvitationStatus,
+            values_callable=lambda x: [e.value for e in x],
+            native_enum=False,  # Don't use PostgreSQL native ENUM, use VARCHAR instead
+        ),
+        nullable=False,
+        default=InvitationStatus.PENDING,
+        index=True
+    )
     expires_at = Column(DateTime, nullable=False)
     accepted_at = Column(DateTime, nullable=True)
 

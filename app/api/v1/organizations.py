@@ -11,12 +11,15 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.crud import organization_crud, user_crud, role_crud, invitation_crud
-from app.models import User, Organization
+from app.models import User, Organization, Invitation, InvitationStatus
 from app.schemas import (
     OrganizationCreate,
     OrganizationUpdate,
     OrganizationResponse,
     OrganizationWithStats,
+    OrganizationMemberResponse,
+    PendingInvitationResponse,
+    OrganizationMembersResponse,
     UserResponse,
     InvitationBatchCreate,
     InvitationResponse,
@@ -149,6 +152,115 @@ async def get_my_organization(
     return organization
 
 
+@router.get("/me/members", response_model=OrganizationMembersResponse)
+async def get_organization_members(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get all members of current user's organization, including pending invitations.
+
+    Args:
+        db: Database session
+        current_user: Current authenticated user
+
+    Returns:
+        List of organization members and pending invitations
+
+    Raises:
+        HTTPException: If user doesn't have organization
+    """
+    from app.services.email import ROLE_DISPLAY_NAMES
+
+    # Check if user has organization
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcının organizasyonu yok"
+        )
+
+    # Get organization
+    organization = await organization_crud.get(db, id=current_user.organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı"
+        )
+
+    # Get all users in the organization
+    stmt = select(User).where(User.organization_id == current_user.organization_id)
+    result = await db.execute(stmt)
+    org_users = result.scalars().all()
+
+    # Build member list with organization-specific roles
+    members = []
+    for user in org_users:
+        # Get user's roles for this organization
+        # Note: user_roles table has organization_id column
+        stmt = (
+            select(User)
+            .where(User.id == user.id)
+            .options(selectinload(User.roles))
+        )
+        result = await db.execute(stmt)
+        user_with_roles = result.scalar_one()
+
+        # For now, get the primary role (first role in the list)
+        # TODO: Filter roles by organization_id when role assignment is org-specific
+        primary_role = user_with_roles.roles[0].name if user_with_roles.roles else "guest"
+        role_display = ROLE_DISPLAY_NAMES.get(primary_role, primary_role.title())
+
+        members.append(OrganizationMemberResponse(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            role=primary_role,
+            role_display_name=role_display,
+            is_owner=str(user.id) == str(organization.owner_id),
+            is_verified=user.is_verified,
+            joined_at=user.created_at
+        ))
+
+    # Get pending invitations
+    stmt = (
+        select(Invitation)
+        .where(
+            Invitation.organization_id == current_user.organization_id,
+            Invitation.status == InvitationStatus.PENDING
+        )
+    )
+    result = await db.execute(stmt)
+    pending_invites = result.scalars().all()
+
+    # Build pending invitations list
+    pending_invitations = []
+    for invite in pending_invites:
+        # Get inviter info
+        inviter = await user_crud.get(db, id=invite.invited_by_user_id)
+        inviter_name = f"{inviter.first_name} {inviter.last_name}".strip() if inviter else "Unknown"
+
+        role_display = ROLE_DISPLAY_NAMES.get(invite.role, invite.role.title())
+
+        pending_invitations.append(PendingInvitationResponse(
+            id=invite.id,
+            email=invite.email,
+            role=invite.role,
+            role_display_name=role_display,
+            invited_by_name=inviter_name,
+            invited_by_email=inviter.email if inviter else "",
+            expires_at=invite.expires_at,
+            created_at=invite.created_at
+        ))
+
+    return OrganizationMembersResponse(
+        members=members,
+        pending_invitations=pending_invitations,
+        total_members=len(members),
+        total_pending=len(pending_invitations)
+    )
+
+
 @router.get("/me/stats", response_model=OrganizationWithStats)
 async def get_my_organization_stats(
     db: AsyncSession = Depends(get_db),
@@ -262,6 +374,13 @@ async def invite_users_to_organization(
             detail="Sadece organizasyon sahibi veya admin kullanıcı davet edebilir"
         )
 
+    # Validate role (cannot invite as owner)
+    if invite_in.role.lower() == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Owner rolüne davet gönderilemez. Bir organizasyonun sadece 1 sahibi olabilir."
+        )
+
     # Create invitations
     created_invitations = []
     for email in invite_in.emails:
@@ -274,7 +393,7 @@ async def invite_users_to_organization(
 
         if existing_invitation:
             # Skip if already pending, otherwise create new one
-            if existing_invitation.status.value == "pending":
+            if existing_invitation.status == InvitationStatus.PENDING:
                 print(f"⚠️  Email {email} zaten bekleyen bir davete sahip, atlanıyor...")
                 continue
 
@@ -290,14 +409,38 @@ async def invite_users_to_organization(
 
         created_invitations.append(invitation)
 
-        # Log invitation (email sending will be implemented later)
-        print(f"📧 Davet oluşturuldu:")
-        print(f"   Email: {email}")
-        print(f"   Organization: {organization.name}")
-        print(f"   Role: {invite_in.role}")
-        print(f"   Token: {invitation.token}")
-        print(f"   Expires: {invitation.expires_at}")
-        print(f"   Accept URL: /invitations/accept/{invitation.token}")
+        # Send invitation email
+        try:
+            from app.services import send_invitation_email
+
+            # Get inviter's full name
+            inviter_name = f"{current_user.first_name} {current_user.last_name}".strip()
+            if not inviter_name:
+                inviter_name = current_user.email.split('@')[0]  # Fallback to email username
+
+            # Format expires_at for email display
+            expires_at_str = invitation.expires_at.strftime("%d.%m.%Y %H:%M")
+
+            # Send email
+            email_sent = await send_invitation_email(
+                email=email,
+                inviter_name=inviter_name,
+                organization_name=organization.name,
+                organization_type=organization.organization_type or "law_firm",
+                role=invite_in.role,
+                invitation_token=str(invitation.token),
+                expires_at=expires_at_str,
+                expires_in_days=7
+            )
+
+            if email_sent:
+                print(f"✅ Invitation email sent to {email} as {invite_in.role}")
+            else:
+                print(f"⚠️  Invitation created but email failed to send to {email}")
+
+        except Exception as e:
+            # Don't fail the invitation creation if email fails
+            print(f"⚠️  Invitation created but email error for {email}: {str(e)}")
 
     if not created_invitations:
         raise HTTPException(

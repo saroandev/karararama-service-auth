@@ -369,6 +369,157 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "usage:view_own"
             ]
         },
+        # ============================================================================
+        # LEGAL ORGANIZATION ROLES (for law firms and legal departments)
+        # These roles are used within organizations for legal team members
+        # ============================================================================
+        {
+            "name": "org-admin",
+            "description": "Organizasyon Yöneticisi - organizasyon yönetimi yetkisi (owner'dan sonra en yetkili)",
+            "default_daily_query_limit": 100,
+            "default_monthly_query_limit": 3000,
+            "default_daily_document_limit": 100,
+            "default_max_document_size_mb": 50,
+            "permissions": [
+                # Auth
+                "auth:login", "auth:logout", "auth:reset_password", "auth:manage_2fa",
+                # Users - Can manage org members
+                "users:read", "users:update", "users:change_password", "users:upload_avatar",
+                "users:manage_notifications", "users:manage_api_keys",
+                # Documents - Full access
+                "documents:*",
+                # Research - Full access
+                "research:*",
+                # Usage
+                "usage:*",
+                # Billing - View only
+                "billing:view", "billing:view_plan", "billing:download_invoices",
+                # Notifications
+                "notifications:*",
+                # Workspaces - Full control
+                "workspaces:*",
+                # Sharing - Full control
+                "sharing:*",
+                # Comments
+                "comments:*",
+                # Integrations - Full access
+                "integrations:*",
+                # Data
+                "data:export", "data:import", "data:backup",
+                # Security
+                "security:view_sessions", "security:terminate_sessions",
+                "security:view_login_history", "security:manage_2fa"
+            ]
+        },
+        {
+            "name": "managing-lawyer",
+            "description": "Yönetici Avukat - kıdemli avukat, ekip yönetimi yetkisi",
+            "default_daily_query_limit": 70,
+            "default_monthly_query_limit": 2000,
+            "default_daily_document_limit": 80,
+            "default_max_document_size_mb": 30,
+            "permissions": [
+                # Auth
+                "auth:login", "auth:logout", "auth:reset_password", "auth:manage_2fa",
+                # Users - Can view org members
+                "users:read", "users:update", "users:upload_avatar", "users:manage_notifications",
+                # Documents - Full access
+                "documents:upload", "documents:read", "documents:update", "documents:delete",
+                "documents:download", "documents:share", "documents:tag", "documents:search",
+                "documents:extract", "documents:edit_metadata", "documents:bulk_operations",
+                # Research - Full access
+                "research:query", "research:history", "research:save", "research:delete_saved",
+                "research:export", "research:advanced_search", "research:create_templates",
+                # Usage
+                "usage:view_own", "usage:view_tokens", "usage:view_quotas", "usage:export_reports",
+                # Billing - View only
+                "billing:view", "billing:view_plan",
+                # Notifications
+                "notifications:read", "notifications:mark_read", "notifications:delete",
+                "notifications:manage_preferences",
+                # Workspaces
+                "workspaces:create", "workspaces:invite", "workspaces:manage_settings",
+                # Sharing
+                "sharing:create", "sharing:revoke", "sharing:manage_permissions",
+                # Comments
+                "comments:create", "comments:update", "comments:delete",
+                # Integrations
+                "integrations:view", "integrations:create",
+                # Data
+                "data:export", "data:backup",
+                # Security
+                "security:view_sessions", "security:view_login_history", "security:manage_2fa"
+            ]
+        },
+        {
+            "name": "lawyer",
+            "description": "Avukat - standart avukat yetkisi",
+            "default_daily_query_limit": 35,
+            "default_monthly_query_limit": 1000,
+            "default_daily_document_limit": 50,
+            "default_max_document_size_mb": 20,
+            "permissions": [
+                # Auth
+                "auth:login", "auth:logout", "auth:reset_password",
+                # Users
+                "users:read", "users:update", "users:upload_avatar", "users:manage_notifications",
+                # Documents - Standard operations
+                "documents:upload", "documents:read", "documents:update", "documents:delete",
+                "documents:download", "documents:share", "documents:tag", "documents:search",
+                "documents:extract", "documents:edit_metadata",
+                # Research - Full access
+                "research:query", "research:history", "research:save", "research:delete_saved",
+                "research:export", "research:advanced_search",
+                # Usage
+                "usage:view_own", "usage:view_tokens", "usage:view_quotas",
+                # Notifications
+                "notifications:read", "notifications:mark_read", "notifications:delete",
+                "notifications:manage_preferences",
+                # Workspaces - Limited
+                "workspaces:invite",
+                # Sharing
+                "sharing:create", "sharing:revoke",
+                # Comments
+                "comments:create", "comments:update", "comments:delete",
+                # Integrations - View only
+                "integrations:view",
+                # Data
+                "data:export",
+                # Security
+                "security:view_sessions", "security:view_login_history", "security:manage_2fa"
+            ]
+        },
+        {
+            "name": "trainee",
+            "description": "Stajyer Avukat - sınırlı yetkiler",
+            "default_daily_query_limit": 17,
+            "default_monthly_query_limit": 500,
+            "default_daily_document_limit": 30,
+            "default_max_document_size_mb": 10,
+            "permissions": [
+                # Auth
+                "auth:login", "auth:logout", "auth:reset_password",
+                # Users - Read only
+                "users:read", "users:update", "users:upload_avatar",
+                # Documents - Basic operations
+                "documents:upload", "documents:read", "documents:download",
+                "documents:search", "documents:extract", "documents:tag",
+                # Research - Basic access
+                "research:query", "research:history", "research:save",
+                "research:delete_saved", "research:export",
+                # Usage
+                "usage:view_own", "usage:view_quotas",
+                # Notifications
+                "notifications:read", "notifications:mark_read",
+                "notifications:manage_preferences",
+                # Comments
+                "comments:create", "comments:update",
+                # Data - Export only
+                "data:export",
+                # Security
+                "security:view_sessions", "security:manage_2fa"
+            ]
+        },
     ]
 
     for role_data in roles_data:
@@ -485,10 +636,12 @@ async def seed_database():
                 return
 
             # Seed default organization
-            default_org = await seed_default_organization(db)
+            # NOTE: Disabled because OrganizationCreate requires owner_email
+            # default_org = await seed_default_organization(db)
 
             # Seed default admin user
-            await seed_default_admin(db, organization_id=default_org.id, admin_role_id=admin_role.id)
+            # NOTE: Disabled because it depends on default organization
+            # await seed_default_admin(db, organization_id=default_org.id, admin_role_id=admin_role.id)
 
             print("\n✅ Database seeding completed successfully!")
 

@@ -43,6 +43,9 @@ from app.schemas.organization import (
     OrganizationUpdate,
     OrganizationResponse,
     OrganizationWithStats,
+    OrganizationMemberResponse,
+    PendingInvitationResponse,
+    OrganizationMembersResponse,
 )
 from app.schemas.invitation import (
     InvitationBase,
