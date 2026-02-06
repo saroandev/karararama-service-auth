@@ -44,6 +44,12 @@ from app.schemas.organization import (
     OrganizationResponse,
     OrganizationWithStats,
 )
+from app.schemas.uets_account import (
+    UetsAccountCreate,
+    UetsAccountResponse,
+    UetsAccountItem,
+    UetsAccountListResponse,
+)
 
 __all__ = [
     # User
@@ -83,4 +89,9 @@ __all__ = [
     "OrganizationUpdate",
     "OrganizationResponse",
     "OrganizationWithStats",
+    # UETS Account
+    "UetsAccountCreate",
+    "UetsAccountResponse",
+    "UetsAccountItem",
+    "UetsAccountListResponse",
 ]

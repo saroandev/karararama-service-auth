@@ -8,6 +8,7 @@ from app.crud.permission import CRUDPermission, permission_crud
 from app.crud.usage import CRUDUsage, usage_crud
 from app.crud.refresh_token import CRUDRefreshToken, refresh_token_crud
 from app.crud.blacklisted_token_crud import CRUDBlacklistedToken, blacklisted_token_crud
+from app.crud.uets_account import CRUDUetsAccount, uets_account_crud
 
 __all__ = [
     "CRUDOrganization",
@@ -24,4 +25,6 @@ __all__ = [
     "refresh_token_crud",
     "CRUDBlacklistedToken",
     "blacklisted_token_crud",
+    "CRUDUetsAccount",
+    "uets_account_crud",
 ]
