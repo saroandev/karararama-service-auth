@@ -21,6 +21,13 @@ done
 
 echo "PostgreSQL is up - executing migrations"
 
+# Check for multiple heads and merge if necessary
+HEAD_COUNT=$(alembic heads 2>&1 | grep -c "^[a-f0-9]")
+if [ "$HEAD_COUNT" -gt 1 ]; then
+    echo "Multiple heads detected, creating merge migration..."
+    alembic merge -m "auto_merge_heads" heads
+fi
+
 # Run database migrations
 alembic upgrade head
 
