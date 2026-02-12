@@ -28,7 +28,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8001:8001"
+      - "${PORT}:8001"
     networks:
       - onedocs-network
     depends_on:

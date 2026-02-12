@@ -10,6 +10,9 @@ from app.models.blacklisted_token import BlacklistedToken
 from app.models.usage_log import UsageLog
 from app.models.activity_watch_token import ActivityWatchToken
 from app.models.uets_account import UetsAccount
+from app.models.invitation import Invitation, InvitationStatus
+from app.models.email_verification import EmailVerification
+from app.models.organization_member import OrganizationMember
 
 __all__ = [
     "Organization",
@@ -21,6 +24,10 @@ __all__ = [
     "UsageLog",
     "ActivityWatchToken",
     "UetsAccount",
+    "Invitation",
+    "InvitationStatus",
+    "EmailVerification",
+    "OrganizationMember",
     "user_roles",
     "role_permissions",
 ]

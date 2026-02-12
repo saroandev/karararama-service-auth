@@ -51,11 +51,18 @@ class User(Base, UUIDMixin, TimestampMixin):
     password_hash = Column(String(255), nullable=False)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
+    phone = Column(String(20), nullable=True)
+    coupon_code = Column(String(50), nullable=True)
 
     # Account Status
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     is_verified = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
+
+    # Legal Consents (GDPR Compliance)
+    kvkk_consent_at = Column(DateTime, nullable=True)
+    cookie_consent_at = Column(DateTime, nullable=True)
+    privacy_consent_at = Column(DateTime, nullable=True)
 
     # Quota Limits (NULL = unlimited, typically for admins)
     daily_query_limit = Column(Integer, nullable=True)
@@ -75,6 +82,12 @@ class User(Base, UUIDMixin, TimestampMixin):
         "Organization",
         back_populates="users",
         foreign_keys=[organization_id],
+        lazy="selectin"
+    )
+    memberships = relationship(
+        "OrganizationMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
         lazy="selectin"
     )
     roles = relationship(
@@ -117,3 +130,22 @@ class User(Base, UUIDMixin, TimestampMixin):
     def has_unlimited_queries(self) -> bool:
         """Check if user has unlimited query quota."""
         return self.daily_query_limit is None
+
+    def get_role_in_org(self, org_id: UUID) -> str:
+        """Get user's role in a specific organization."""
+        for membership in self.memberships:
+            if membership.organization_id == org_id:
+                return membership.role
+        return None
+
+    def get_primary_membership(self):
+        """Get user's primary organization membership."""
+        for membership in self.memberships:
+            if membership.is_primary:
+                return membership
+        return None
+
+    def is_owner_of_org(self, org_id: UUID) -> bool:
+        """Check if user is owner of a specific organization."""
+        role = self.get_role_in_org(org_id)
+        return role == "owner"

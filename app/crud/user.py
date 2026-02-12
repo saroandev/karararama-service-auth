@@ -83,9 +83,18 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         # Hash password
         hashed_password = password_handler.hash_password(obj_in.password)
 
-        # Create user dict without password and password_confirm (validation only)
-        user_data = obj_in.model_dump(exclude={"password", "password_confirm"})
+        # Create user dict without password, password_confirm, and consent booleans
+        user_data = obj_in.model_dump(exclude={"password", "password_confirm", "agree_kvkk", "agree_cookies", "agree_privacy"})
         user_data["password_hash"] = hashed_password
+
+        # Convert consent booleans to timestamps
+        from datetime import datetime
+        if obj_in.agree_kvkk:
+            user_data["kvkk_consent_at"] = datetime.utcnow()
+        if obj_in.agree_cookies:
+            user_data["cookie_consent_at"] = datetime.utcnow()
+        if obj_in.agree_privacy:
+            user_data["privacy_consent_at"] = datetime.utcnow()
 
         db_obj = User(**user_data)
         db.add(db_obj)

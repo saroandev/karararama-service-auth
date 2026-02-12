@@ -43,6 +43,32 @@ from app.schemas.organization import (
     OrganizationUpdate,
     OrganizationResponse,
     OrganizationWithStats,
+    OrganizationMemberResponse,
+    PendingInvitationResponse,
+    OrganizationMembersResponse,
+)
+from app.schemas.invitation import (
+    InvitationBase,
+    InvitationCreate,
+    InvitationBatchCreate,
+    InvitationAccept,
+    InvitationResponse,
+    InvitationPublicResponse,
+)
+from app.schemas.email_verification import (
+    SendVerificationEmailRequest,
+    SendVerificationEmailResponse,
+    VerifyEmailCodeRequest,
+    VerifyEmailCodeResponse,
+    ResendVerificationEmailRequest,
+    ResendVerificationEmailResponse,
+)
+from app.schemas.organization_member import (
+    OrganizationMembershipResponse,
+    UserOrganizationResponse,
+    UserOrganizationsListResponse,
+    SetPrimaryOrganizationRequest,
+    SetPrimaryOrganizationResponse,
 )
 from app.schemas.uets_account import (
     UetsAccountCreate,
@@ -94,4 +120,24 @@ __all__ = [
     "UetsAccountResponse",
     "UetsAccountItem",
     "UetsAccountListResponse",
+    # Invitation
+    "InvitationBase",
+    "InvitationCreate",
+    "InvitationBatchCreate",
+    "InvitationAccept",
+    "InvitationResponse",
+    "InvitationPublicResponse",
+    # Email Verification
+    "SendVerificationEmailRequest",
+    "SendVerificationEmailResponse",
+    "VerifyEmailCodeRequest",
+    "VerifyEmailCodeResponse",
+    "ResendVerificationEmailRequest",
+    "ResendVerificationEmailResponse",
+    # Organization Member
+    "OrganizationMembershipResponse",
+    "UserOrganizationResponse",
+    "UserOrganizationsListResponse",
+    "SetPrimaryOrganizationRequest",
+    "SetPrimaryOrganizationResponse",
 ]

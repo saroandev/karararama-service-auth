@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import jwt_handler
 from app.core.permissions import get_data_access_for_user, get_primary_role, calculate_remaining_credits
-from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud
+from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud
 from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
+from app.models.invitation import InvitationStatus
 from app.schemas import (
     LoginRequest,
     RefreshTokenRequest,
@@ -21,6 +22,12 @@ from app.schemas import (
     UserCreate,
     UserResponse,
     OrganizationCreate,
+    SendVerificationEmailRequest,
+    SendVerificationEmailResponse,
+    VerifyEmailCodeRequest,
+    VerifyEmailCodeResponse,
+    ResendVerificationEmailRequest,
+    ResendVerificationEmailResponse,
 )
 from app.schemas.activity_watch import (
     ActivityWatchLoginRequest,
@@ -42,24 +49,30 @@ def generate_verification_code() -> str:
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_in: UserCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    invitation_token: str = None
 ) -> User:
     """
     Register a new user.
 
     Creates a new user with default 'guest' role.
     Guest users can login immediately with limited permissions.
-    Other roles require admin to assign organization.
+
+    If invitation_token is provided:
+        - Validates the invitation
+        - Assigns organization and role from invitation
+        - Marks invitation as accepted
 
     Args:
         user_in: User registration data (first_name, last_name, email, password, password_confirm).
         db: Database session
+        invitation_token: Optional invitation token (query parameter)
 
     Returns:
-        Created user with guest role
+        Created user with assigned role and organization
 
     Raises:
-        HTTPException: If email already exists or passwords don't match
+        HTTPException: If email already exists, passwords don't match, or invitation invalid
     """
     # Check if passwords match
     if not user_in.validate_passwords():
@@ -76,18 +89,106 @@ async def register(
             detail="Bu e-posta adresi zaten kayıtlı"
         )
 
-    # Create user using CRUD (handles hashing and default values)
+    # Validate invitation if token provided
+    invitation = None
+    if invitation_token:
+        invitation = await invitation_crud.get_by_token(db, token=invitation_token)
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Geçersiz davet tokeni"
+            )
+
+        # Check if invitation is valid
+        if not invitation.is_valid:
+            if invitation.status == InvitationStatus.ACCEPTED:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Bu davet zaten kabul edilmiş"
+                )
+            elif invitation.status == InvitationStatus.EXPIRED or invitation.is_expired:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Bu davetin süresi dolmuş"
+                )
+            elif invitation.status == InvitationStatus.REVOKED:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Bu davet iptal edilmiş"
+                )
+
+        # Verify email matches invitation
+        if invitation.email.lower() != user_in.email.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="E-posta adresi davet ile eşleşmiyor"
+            )
+
+    # Create user using CRUD (handles hashing, consent timestamps, and default values)
     user = await user_crud.create(db, obj_in=user_in)
 
-    # Assign default 'guest' role
-    from app.crud import role_crud
-    guest_role = await role_crud.get_by_name(db, name="guest")
+    # Process invitation if exists
+    if invitation:
+        # Create membership in organization_members table
+        from app.crud import organization_member_crud
 
-    if guest_role:
-        await user_crud.add_role(db, user=user, role=guest_role)
+        await organization_member_crud.create(
+            db,
+            user_id=user.id,
+            organization_id=invitation.organization_id,
+            role=invitation.role,
+            is_primary=True  # First organization is always primary for new users
+        )
+
+        # Set organization as user's primary org
+        user.organization_id = invitation.organization_id
+        db.add(user)
+        await db.commit()
+
+        # Get role from invitation
+        invited_role = await role_crud.get_by_name(db, name=invitation.role)
+        if invited_role:
+            await user_crud.add_role(db, user=user, role=invited_role)
+
+        # Mark invitation as accepted
+        await invitation_crud.mark_accepted(db, invitation=invitation)
+
+        print(f"✅ Kullanıcı davet ile kaydoldu:")
+        print(f"   Email: {user.email}")
+        print(f"   Organization ID: {invitation.organization_id}")
+        print(f"   Role: {invitation.role}")
+    else:
+        # Assign default 'guest' role
+        guest_role = await role_crud.get_by_name(db, name="guest")
+
+        if guest_role:
+            await user_crud.add_role(db, user=user, role=guest_role)
 
     # Reload user with all relationships
     user = await user_crud.get_with_roles(db, id=user.id)
+
+    # Send verification email automatically
+    try:
+        from app.crud import email_verification
+        from app.services import send_verification_email
+
+        # Create verification code
+        verification = await email_verification.create_verification_code(
+            db, user_id=user.id, email=user.email
+        )
+
+        # Send email
+        await send_verification_email(user.email, verification.code)
+
+        print(f"✅ Verification email sent to {user.email}")
+        print(f"   Code: {verification.code} (expires in 30 minutes)")
+
+    except Exception as e:
+        # Don't fail registration if email sending fails
+        print(f"⚠️  Failed to send verification email: {str(e)}")
+        print(f"   User registration succeeded but email not sent")
+
     return user
 
 
@@ -175,6 +276,21 @@ async def login(
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
     remaining_credits = calculate_remaining_credits(user, today_usage)
 
+    # Get all organizations user belongs to
+    from app.crud import organization_member_crud
+    memberships = await organization_member_crud.get_user_memberships(db, user_id=user.id)
+
+    organizations = []
+    for membership in memberships:
+        org = membership.organization
+        organizations.append({
+            "id": str(org.id),
+            "name": org.name,
+            "role": membership.role,
+            "is_primary": membership.is_primary,
+            "is_owner": org.owner_id == user.id
+        })
+
     # Create token payload
     token_data = {
         "sub": str(user.id),
@@ -189,7 +305,8 @@ async def login(
             "daily_query_limit": user.daily_query_limit,
             "monthly_query_limit": user.monthly_query_limit,
             "daily_document_limit": user.daily_document_upload_limit,
-        }
+        },
+        "organizations": organizations  # NEW: All organizations with roles
     }
 
     # Create tokens
@@ -204,10 +321,14 @@ async def login(
         device_info=None  # TODO: Extract from request headers
     )
 
+    # Check if user needs onboarding (no organization)
+    needs_onboarding = user.organization_id is None
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        token_type="bearer"
+        token_type="bearer",
+        needs_onboarding=needs_onboarding
     )
 
 
@@ -368,6 +489,21 @@ async def refresh_token(
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
     remaining_credits = calculate_remaining_credits(user, today_usage)
 
+    # Get all organizations user belongs to
+    from app.crud import organization_member_crud
+    memberships = await organization_member_crud.get_user_memberships(db, user_id=user.id)
+
+    organizations = []
+    for membership in memberships:
+        org = membership.organization
+        organizations.append({
+            "id": str(org.id),
+            "name": org.name,
+            "role": membership.role,
+            "is_primary": membership.is_primary,
+            "is_owner": org.owner_id == user.id
+        })
+
     # Create new token payload
     token_data = {
         "sub": str(user.id),
@@ -382,7 +518,8 @@ async def refresh_token(
             "daily_query_limit": user.daily_query_limit,
             "monthly_query_limit": user.monthly_query_limit,
             "daily_document_limit": user.daily_document_upload_limit,
-        }
+        },
+        "organizations": organizations  # NEW: All organizations with roles
     }
 
     # Create new tokens
@@ -688,4 +825,240 @@ async def activity_watch_verify(
 
     return ActivityWatchVerifyResponse(
         is_active=user.is_active
+    )
+
+
+# ============================================================================
+# EMAIL VERIFICATION ENDPOINTS
+# ============================================================================
+
+
+@router.post(
+    "/send-verification-email",
+    response_model=SendVerificationEmailResponse,
+    status_code=status.HTTP_200_OK
+)
+async def send_verification_email_endpoint(
+    request: SendVerificationEmailRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Send verification email with 6-digit code to user.
+
+    This is typically called automatically after registration,
+    but can also be called manually if needed.
+
+    Args:
+        request: Email address to send verification code to
+        db: Database session
+
+    Returns:
+        Success response with cooldown information if applicable
+
+    Raises:
+        HTTPException: If user not found or cooldown active
+    """
+    from app.crud import email_verification
+    from app.services import send_verification_email
+
+    # Find user by email
+    user = await user_crud.get_by_email(db, email=request.email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bu email adresiyle kayıtlı kullanıcı bulunamadı"
+        )
+
+    # Check if user already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu email adresi zaten doğrulanmış"
+        )
+
+    # Check resend cooldown (60 seconds)
+    can_resend, seconds_remaining = await email_verification.check_resend_cooldown(
+        db, email=request.email
+    )
+
+    if not can_resend:
+        return SendVerificationEmailResponse(
+            success=False,
+            message=f"Lütfen {seconds_remaining} saniye bekleyin",
+            cooldown_remaining=seconds_remaining
+        )
+
+    # Invalidate old codes
+    await email_verification.invalidate_old_codes(db, email=request.email)
+
+    # Create new verification code
+    verification = await email_verification.create_verification_code(
+        db, user_id=user.id, email=request.email
+    )
+
+    # Send email
+    email_sent = await send_verification_email(request.email, verification.code)
+
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email gönderilemedi. Lütfen tekrar deneyin"
+        )
+
+    return SendVerificationEmailResponse(
+        success=True,
+        message="Doğrulama kodu email adresinize gönderildi",
+        cooldown_remaining=None
+    )
+
+
+@router.post(
+    "/verify-email-code",
+    response_model=VerifyEmailCodeResponse,
+    status_code=status.HTTP_200_OK
+)
+async def verify_email_code_endpoint(
+    request: VerifyEmailCodeRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Verify email with 6-digit code.
+
+    Args:
+        request: Email and verification code
+        db: Database session
+
+    Returns:
+        Success response
+
+    Raises:
+        HTTPException: If code invalid, expired, or max attempts reached
+    """
+    from app.crud import email_verification
+
+    # Find user by email
+    user = await user_crud.get_by_email(db, email=request.email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı"
+        )
+
+    # Check if already verified
+    if user.is_verified:
+        return VerifyEmailCodeResponse(
+            success=True,
+            message="Email adresi zaten doğrulanmış"
+        )
+
+    # Validate code
+    is_valid, error_message, verification = await email_verification.validate_code(
+        db, email=request.email, code=request.code
+    )
+
+    if not is_valid:
+        # Increment attempts if verification record exists
+        if verification:
+            await email_verification.increment_attempts(db, verification=verification)
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_message
+        )
+
+    # Mark code as used
+    await email_verification.mark_as_used(db, verification=verification)
+
+    # Mark user as verified
+    user.is_verified = True
+    db.add(user)
+    await db.commit()
+
+    return VerifyEmailCodeResponse(
+        success=True,
+        message="Email adresiniz başarıyla doğrulandı"
+    )
+
+
+@router.post(
+    "/resend-verification-email",
+    response_model=ResendVerificationEmailResponse,
+    status_code=status.HTTP_200_OK
+)
+async def resend_verification_email_endpoint(
+    request: ResendVerificationEmailRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Resend verification email (60s cooldown).
+
+    Args:
+        request: Email address to resend verification code to
+        db: Database session
+
+    Returns:
+        Success response with next resend time
+
+    Raises:
+        HTTPException: If user not found, already verified, or cooldown active
+    """
+    from app.crud import email_verification
+    from app.services import send_verification_email
+    from datetime import datetime
+
+    # Find user by email
+    user = await user_crud.get_by_email(db, email=request.email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı"
+        )
+
+    # Check if already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu email adresi zaten doğrulanmış"
+        )
+
+    # Check resend cooldown (60 seconds)
+    can_resend, seconds_remaining = await email_verification.check_resend_cooldown(
+        db, email=request.email
+    )
+
+    if not can_resend:
+        next_resend_timestamp = int(datetime.utcnow().timestamp()) + seconds_remaining
+        return ResendVerificationEmailResponse(
+            success=False,
+            message=f"Lütfen {seconds_remaining} saniye bekleyin",
+            cooldown_remaining=seconds_remaining,
+            next_resend_time=next_resend_timestamp
+        )
+
+    # Invalidate old codes
+    await email_verification.invalidate_old_codes(db, email=request.email)
+
+    # Create new verification code
+    verification = await email_verification.create_verification_code(
+        db, user_id=user.id, email=request.email
+    )
+
+    # Send email
+    email_sent = await send_verification_email(request.email, verification.code)
+
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email gönderilemedi. Lütfen tekrar deneyin"
+        )
+
+    # Calculate next resend time
+    from app.crud.email_verification import EMAIL_RESEND_COOLDOWN_SECONDS
+    next_resend_timestamp = int(datetime.utcnow().timestamp()) + EMAIL_RESEND_COOLDOWN_SECONDS
+
+    return ResendVerificationEmailResponse(
+        success=True,
+        message="Yeni doğrulama kodu gönderildi",
+        cooldown_remaining=EMAIL_RESEND_COOLDOWN_SECONDS,
+        next_resend_time=next_resend_timestamp
     )

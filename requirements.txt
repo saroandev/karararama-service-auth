@@ -19,6 +19,10 @@ bcrypt==4.0.1
 # Validation
 email-validator==2.1.0
 
+# Email Sending
+aiosmtplib==3.0.1
+jinja2==3.1.3
+
 # HTTP Client (for inter-service communication)
 httpx==0.26.0
 

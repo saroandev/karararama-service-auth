@@ -12,7 +12,7 @@ env:
     AWS_ACCOUNT_ID: 908555131527
     AWS_REGION: eu-central-1
     AWS_ROLE_ARN: "arn:aws:iam::908555131527:role/GithubActionIAMRole"
-    APPLICATION_NAME: auth # auth, global, knowledgebase, toolkit, frontend
+    APPLICATION_NAME: auth-karararama # auth, global, knowledgebase, toolkit, frontend
     # EKS_CLUSTER_NAME: onedocsv2-eks
     EKS_NAMESPACE: preprod
     IMAGE_TAG: latest

@@ -14,7 +14,17 @@ from alembic import context
 from app.core.config import settings
 from app.core.database import Base
 # Import all models so Alembic can detect them
-from app.models import User, Role, Permission, RefreshToken
+from app.models import (
+    User,
+    Role,
+    Permission,
+    RefreshToken,
+    BlacklistedToken,
+    UsageLog,
+    ActivityWatchToken,
+    Organization,
+    Invitation,
+)
 
 # this is the Alembic Config object
 config = context.config

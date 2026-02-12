@@ -15,7 +15,10 @@ class OrganizationBase(BaseModel):
 
 class OrganizationCreate(OrganizationBase):
     """Organization creation schema."""
-    owner_id: Optional[UUID] = None
+    owner_email: str
+    organization_type: Optional[str] = None  # "law-firm", "legal-department", "other"
+    organization_size: Optional[str] = None  # "1-9", "10-49", "50-200", "200+"
+    description: Optional[str] = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -41,3 +44,42 @@ class OrganizationWithStats(OrganizationResponse):
     total_members: int
     total_queries: int
     total_documents: int
+
+
+class OrganizationMemberResponse(BaseModel):
+    """Schema for organization member information."""
+    id: UUID
+    first_name: str
+    last_name: str
+    email: str
+    role: str  # Role name within the organization
+    role_display_name: str  # Turkish display name for the role
+    is_owner: bool
+    is_verified: bool
+    joined_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PendingInvitationResponse(BaseModel):
+    """Schema for pending invitation information."""
+    id: UUID
+    email: str
+    role: str
+    role_display_name: str
+    invited_by_name: str
+    invited_by_email: str
+    expires_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OrganizationMembersResponse(BaseModel):
+    """Schema for organization members list with pending invitations."""
+    members: list[OrganizationMemberResponse]
+    pending_invitations: list[PendingInvitationResponse]
+    total_members: int
+    total_pending: int
