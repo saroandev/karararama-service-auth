@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8001
 
+    # Password Reset
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    PASSWORD_RESET_RATE_LIMIT_REQUESTS: int = 3
+    PASSWORD_RESET_RATE_LIMIT_WINDOW_HOURS: int = 1
+    FRONTEND_RESET_PASSWORD_URL: str = "http://localhost:3000/reset-password"
+
     # pgAdmin (optional, not used in app)
     PGADMIN_DEFAULT_EMAIL: str = "admin@onedocs.com"
     PGADMIN_DEFAULT_PASSWORD: str = "admin123"

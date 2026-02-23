@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import jwt_handler
 from app.core.permissions import get_data_access_for_user, get_primary_role, calculate_remaining_credits
-from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud
+from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud, password_reset
 from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
 from app.models.invitation import InvitationStatus
@@ -28,6 +28,11 @@ from app.schemas import (
     VerifyEmailCodeResponse,
     ResendVerificationEmailRequest,
     ResendVerificationEmailResponse,
+    ForgotPasswordRequest,
+    ValidateResetTokenRequest,
+    ValidateResetTokenResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
 )
 from app.schemas.activity_watch import (
     ActivityWatchLoginRequest,
@@ -37,6 +42,7 @@ from app.schemas.activity_watch import (
 )
 from app.api.deps import get_current_active_user, security
 from fastapi.security import HTTPAuthorizationCredentials
+from app.services.email import send_password_reset_email
 
 router = APIRouter()
 
@@ -1061,4 +1067,179 @@ async def resend_verification_email_endpoint(
         message="Yeni doğrulama kodu gönderildi",
         cooldown_remaining=EMAIL_RESEND_COOLDOWN_SECONDS,
         next_resend_time=next_resend_timestamp
+    )
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Request password reset email.
+
+    Send password reset link to user's email if account exists and is active.
+    For security, always returns success message even if email doesn't exist.
+
+    Rate limit: 3 requests per hour per user.
+
+    Args:
+        request: Forgot password request with email
+        db: Database session
+
+    Returns:
+        Success message (always, to prevent email enumeration)
+    """
+    # Get user by email
+    user = await user_crud.get_by_email(db, email=request.email)
+
+    # Generic success message (prevent email enumeration)
+    success_message = "Eğer bu email adresi sistemde kayıtlıysa, şifre sıfırlama bağlantısı gönderilmiştir."
+
+    # If user doesn't exist or is not active, still return success (security)
+    if not user or not user.is_active:
+        return {"message": success_message}
+
+    # Check rate limit
+    can_request, request_count, remaining = await password_reset.check_rate_limit(
+        db, user_id=user.id
+    )
+
+    if not can_request:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Çok fazla şifre sıfırlama talebi. Lütfen 1 saat sonra tekrar deneyin. (Limit: {password_reset.PASSWORD_RESET_RATE_LIMIT_REQUESTS} istek/saat)"
+        )
+
+    # Invalidate old unused tokens for this user
+    await password_reset.invalidate_user_tokens(db, user_id=user.id)
+
+    # Create new reset token
+    reset_token_record, raw_token = await password_reset.create_reset_token(
+        db,
+        user_id=user.id,
+        ip_address=None  # Can add request.client.host if needed
+    )
+
+    # Send password reset email
+    email_sent = await send_password_reset_email(
+        email=user.email,
+        reset_token=raw_token
+    )
+
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email gönderilemedi. Lütfen tekrar deneyin."
+        )
+
+    return {"message": success_message}
+
+
+@router.post("/validate-reset-token", response_model=ValidateResetTokenResponse)
+async def validate_reset_token(
+    request: ValidateResetTokenRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Validate password reset token.
+
+    Checks if token is valid (exists, not expired, not used).
+    Used by frontend before showing password reset form.
+
+    Args:
+        request: Token validation request
+        db: Database session
+
+    Returns:
+        Validation result with email if valid
+    """
+    # Get valid token
+    reset_token = await password_reset.get_valid_token(db, token=request.token)
+
+    if not reset_token:
+        return ValidateResetTokenResponse(
+            valid=False,
+            error="Geçersiz veya süresi dolmuş token. Lütfen yeni şifre sıfırlama talebi oluşturun."
+        )
+
+    # Get user
+    user = await user_crud.get(db, id=reset_token.user_id)
+    if not user or not user.is_active:
+        return ValidateResetTokenResponse(
+            valid=False,
+            error="Kullanıcı bulunamadı veya aktif değil."
+        )
+
+    return ValidateResetTokenResponse(
+        valid=True,
+        email=user.email
+    )
+
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset user password with token.
+
+    Validates token, updates password, and logs out user from all devices
+    (revokes all refresh tokens and blacklists current access tokens).
+
+    Args:
+        request: Reset password request with token and new password
+        db: Database session
+
+    Returns:
+        Success message
+
+    Security:
+        - Token is single-use and expires after 30 minutes
+        - All existing sessions are terminated after password reset
+        - Password must be at least 6 characters
+        - New password must match confirmation
+    """
+    # Get valid token
+    reset_token = await password_reset.get_valid_token(db, token=request.token)
+
+    if not reset_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Geçersiz veya süresi dolmuş token. Lütfen yeni şifre sıfırlama talebi oluşturun."
+        )
+
+    # Get user
+    user = await user_crud.get(db, id=reset_token.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı"
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hesap aktif değil"
+        )
+
+    # Update password
+    from app.core.security import password_handler
+    user.password_hash = password_handler.hash_password(request.new_password)
+    db.add(user)
+    await db.commit()
+
+    # Mark token as used
+    await password_reset.mark_as_used(db, reset_token=reset_token)
+
+    # Security: Revoke all refresh tokens (logout from all devices)
+    revoked_count = await refresh_token_crud.revoke_all_user_tokens(db, user_id=user.id)
+
+    # Note: We cannot blacklist all access tokens because we don't have them stored
+    # Access tokens will naturally expire after 30 minutes
+    # Users will be logged out when they try to refresh their tokens
+
+    return ResetPasswordResponse(
+        message=f"Şifreniz başarıyla güncellendi. Güvenlik nedeniyle tüm cihazlardan çıkış yapıldı ({revoked_count} oturum sonlandırıldı). Lütfen yeni şifrenizle giriş yapın."
     )

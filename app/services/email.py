@@ -187,6 +187,146 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
         return False
 
 
+# Password Reset Email Template
+PASSWORD_RESET_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Şifre Sıfırlama - OneDocs</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #1e3a5f 50%, rgba(30, 58, 95, 0.8) 100%); padding: 40px 20px; text-align: center;">
+            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">OneDocs</h1>
+            <p style="margin: 10px 0 0 0; color: rgba(255, 255, 255, 0.7); font-size: 14px;">Hukuki Araştırma Platformu</p>
+        </div>
+
+        <!-- Content -->
+        <div style="padding: 40px 30px;">
+            <h2 style="margin: 0 0 20px 0; color: #1e3a5f; font-size: 24px; font-weight: 600;">Şifre Sıfırlama Talebi</h2>
+
+            <p style="margin: 0 0 24px 0; color: #4a5568; font-size: 16px; line-height: 1.6;">
+                OneDocs hesabınız için şifre sıfırlama talebinde bulundunuz. Yeni bir şifre belirlemek için aşağıdaki butona tıklayın:
+            </p>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ reset_url }}" style="display: inline-block; background-color: #1e3a5f; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; transition: background-color 0.3s;">
+                    Şifremi Sıfırla
+                </a>
+            </div>
+
+            <p style="margin: 24px 0 0 0; color: #718096; font-size: 14px; line-height: 1.6; text-align: center;">
+                <strong>Önemli:</strong> Bu bağlantı <strong>30 dakika</strong> boyunca geçerlidir.
+                Bu süre içinde şifre sıfırlama işlemini tamamlamanız gerekmektedir.
+            </p>
+
+            <!-- Alternative Link -->
+            <div style="margin-top: 30px; padding: 20px; background-color: #f7fafc; border-radius: 8px;">
+                <p style="margin: 0 0 10px 0; color: #4a5568; font-size: 13px; font-weight: 600;">
+                    Buton çalışmıyorsa aşağıdaki bağlantıyı kopyalayıp tarayıcınıza yapıştırın:
+                </p>
+                <p style="margin: 0; color: #718096; font-size: 12px; word-break: break-all;">
+                    {{ reset_url }}
+                </p>
+            </div>
+
+            <div style="margin-top: 30px; padding-top: 30px; border-top: 1px solid #e2e8f0;">
+                <p style="margin: 0; color: #a0aec0; font-size: 13px; line-height: 1.6;">
+                    <strong>Güvenlik Uyarısı:</strong> Bu şifre sıfırlama talebini siz yapmadıysanız,
+                    lütfen bu e-postayı göz ardı edin. Hesabınızda herhangi bir değişiklik yapılmayacaktır.
+                    Hesabınızın güvenliğinden endişe ediyorsanız, lütfen destek ekibimizle iletişime geçin.
+                </p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #f7fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 10px 0; color: #718096; font-size: 13px;">
+                © 2026 OneDocs. Tüm hakları saklıdır.
+            </p>
+            <p style="margin: 0; color: #a0aec0; font-size: 12px;">
+                Bu e-posta otomatik olarak gönderilmiştir. Lütfen yanıtlamayın.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+
+async def send_password_reset_email(email: str, reset_token: str) -> bool:
+    """
+    Send password reset email with reset link to user.
+
+    Args:
+        email: Recipient email address
+        reset_token: Password reset token (URL-safe, 43 characters)
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    try:
+        # Get frontend URL from environment
+        frontend_url = os.getenv("FRONTEND_RESET_PASSWORD_URL", "http://localhost:3000/reset-password")
+        reset_url = f"{frontend_url}?token={reset_token}"
+
+        # Console logging for development
+        if ENABLE_CONSOLE_LOG:
+            logger.info("=" * 60)
+            logger.info("🔑 PASSWORD RESET EMAIL (Development Mode)")
+            logger.info(f"   To: {email}")
+            logger.info(f"   Token: {reset_token}")
+            logger.info(f"   Reset URL: {reset_url}")
+            logger.info(f"   Valid for: 30 minutes")
+            logger.info("=" * 60)
+            print(f"\n{'=' * 60}")
+            print(f"🔑 PASSWORD RESET EMAIL (Development Mode)")
+            print(f"   To: {email}")
+            print(f"   Token: {reset_token}")
+            print(f"   Reset URL: {reset_url}")
+            print(f"   Valid for: 30 minutes")
+            print(f"{'=' * 60}\n")
+
+        # Render email template
+        template = Template(PASSWORD_RESET_TEMPLATE)
+        html_body = template.render(reset_url=reset_url)
+
+        # Create email message
+        message = MIMEMultipart("alternative")
+        message["From"] = f"{MAIL_FROM_NAME} <{MAIL_FROM}>"
+        message["To"] = email
+        message["Subject"] = "OneDocs - Şifre Sıfırlama Talebi"
+
+        # Add HTML part
+        html_part = MIMEText(html_body, "html", "utf-8")
+        message.attach(html_part)
+
+        # Send email via SMTP
+        await aiosmtplib.send(
+            message,
+            hostname=SMTP_HOST,
+            port=SMTP_PORT,
+            username=SMTP_USER,
+            password=SMTP_PASSWORD,
+            start_tls=True,
+        )
+
+        logger.info(f"✅ Password reset email sent successfully to {email}")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Failed to send password reset email to {email}: {str(e)}")
+        # In development mode, even if email fails, we logged to console
+        if ENABLE_CONSOLE_LOG:
+            logger.warning("⚠️  Email sending failed but reset link was logged to console (dev mode)")
+            return True  # Consider success in dev mode since link is visible in console
+        return False
+
+
 # Role display name mapping (English role name → Turkish display name)
 ROLE_DISPLAY_NAMES = {
     "owner": "Organizasyon Sahibi",

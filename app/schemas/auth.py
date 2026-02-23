@@ -4,7 +4,7 @@ Pydantic schemas for authentication.
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, validator
 
 
 class LoginRequest(BaseModel):
@@ -47,3 +47,39 @@ class TokenPayload(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Refresh token request schema."""
     refresh_token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Forgot password request schema."""
+    email: EmailStr
+
+
+class ValidateResetTokenRequest(BaseModel):
+    """Validate reset token request schema."""
+    token: str = Field(..., min_length=1, description="Password reset token")
+
+
+class ValidateResetTokenResponse(BaseModel):
+    """Validate reset token response schema."""
+    valid: bool
+    email: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    """Reset password request schema."""
+    token: str = Field(..., min_length=1, description="Password reset token")
+    new_password: str = Field(..., min_length=6, description="New password (min 6 characters)")
+    new_password_confirm: str = Field(..., min_length=6, description="Password confirmation")
+
+    @validator('new_password_confirm')
+    def passwords_match(cls, v, values):
+        """Validate that passwords match."""
+        if 'new_password' in values and v != values['new_password']:
+            raise ValueError('Passwords do not match')
+        return v
+
+
+class ResetPasswordResponse(BaseModel):
+    """Reset password response schema."""
+    message: str

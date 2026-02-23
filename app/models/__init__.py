@@ -13,6 +13,7 @@ from app.models.uets_account import UetsAccount
 from app.models.invitation import Invitation, InvitationStatus
 from app.models.email_verification import EmailVerification
 from app.models.organization_member import OrganizationMember
+from app.models.password_reset import PasswordResetToken
 
 __all__ = [
     "Organization",
@@ -28,6 +29,7 @@ __all__ = [
     "InvitationStatus",
     "EmailVerification",
     "OrganizationMember",
+    "PasswordResetToken",
     "user_roles",
     "role_permissions",
 ]

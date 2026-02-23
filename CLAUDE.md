@@ -137,7 +137,7 @@ python create_default_org.py
 
 All endpoints use `/api/v1` prefix:
 
-- `/auth` - Register, login, token verify (inter-service), logout
+- `/auth` - Register, login, token verify (inter-service), logout, password reset
 - `/users` - User profile management, list users (admin)
 - `/admin` - Role/permission management, quota updates
 - `/usage` - Consumption tracking, usage statistics
@@ -166,6 +166,23 @@ All endpoints use `/api/v1` prefix:
 - `get_current_user()` checks blacklist before validating token
 - Prevents reuse of logged-out tokens
 
+**Password Reset Flow (app/api/v1/auth.py):**
+- Token-based reset (email contains reset link with secure token)
+- Tokens expire after 30 minutes (configurable)
+- Rate limit: 3 requests per hour per user
+- Single-use tokens (marked as used after password reset)
+- All user sessions terminated after successful password reset
+- Endpoints:
+  - `POST /api/v1/auth/forgot-password` - Request password reset email
+  - `POST /api/v1/auth/validate-reset-token` - Validate token before showing form
+  - `POST /api/v1/auth/reset-password` - Reset password with token
+- Security features:
+  - Generic success messages (prevent email enumeration)
+  - SHA256 hashed tokens in database
+  - Token cannot be reused
+  - All refresh tokens revoked on password reset
+  - Rate limiting per user account
+
 **Role Hierarchy (app/db_seed.py):**
 - `superuser` - Full system control
 - `admin` - Unlimited access, user management
@@ -182,6 +199,7 @@ All endpoints use `/api/v1` prefix:
 **Configuration (app/core/config.py):**
 - Settings loaded from `.env` using `pydantic-settings`
 - Key settings: `DATABASE_URL`, `JWT_SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `CORS_ORIGINS`
+- Password reset settings: `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES`, `PASSWORD_RESET_RATE_LIMIT_REQUESTS`, `FRONTEND_RESET_PASSWORD_URL`
 - `POSTGRES_HOST`: Use `localhost` for local Python dev, `postgres` for Docker Compose
 
 **Testing Setup (conftest.py):**
