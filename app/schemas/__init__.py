@@ -30,6 +30,11 @@ from app.schemas.auth import (
     TokenPayload,
     DataAccess,
     RefreshTokenRequest,
+    ForgotPasswordRequest,
+    ValidateResetTokenRequest,
+    ValidateResetTokenResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
 )
 from app.schemas.usage import (
     UsageConsumeRequest,
@@ -104,6 +109,11 @@ __all__ = [
     "TokenPayload",
     "DataAccess",
     "RefreshTokenRequest",
+    "ForgotPasswordRequest",
+    "ValidateResetTokenRequest",
+    "ValidateResetTokenResponse",
+    "ResetPasswordRequest",
+    "ResetPasswordResponse",
     # Usage
     "UsageConsumeRequest",
     "UsageConsumeResponse",
