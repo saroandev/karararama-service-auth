@@ -1,7 +1,7 @@
 """add_password_reset_tokens_table
 
 Revision ID: a1f2b3c4d5e6
-Revises: 089c6a76ed05
+Revises: 70b1b4683e20
 Create Date: 2026-02-23 15:59:00.000000
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'a1f2b3c4d5e6'
-down_revision: Union[str, None] = '089c6a76ed05'
+down_revision: Union[str, None] = '70b1b4683e20'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
