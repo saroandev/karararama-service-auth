@@ -88,13 +88,18 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         user_data["password_hash"] = hashed_password
 
         # Convert consent booleans to timestamps
-        from datetime import datetime
+        from datetime import datetime, timedelta
         if obj_in.agree_kvkk:
             user_data["kvkk_consent_at"] = datetime.utcnow()
         if obj_in.agree_cookies:
             user_data["cookie_consent_at"] = datetime.utcnow()
         if obj_in.agree_privacy:
             user_data["privacy_consent_at"] = datetime.utcnow()
+
+        # SaaS plan: new users start with 14-day free trial
+        user_data["plan"] = "free_trial"
+        user_data["trial_started_at"] = datetime.utcnow()
+        user_data["trial_ends_at"] = datetime.utcnow() + timedelta(days=14)
 
         db_obj = User(**user_data)
         db.add(db_obj)

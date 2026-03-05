@@ -70,6 +70,11 @@ class User(Base, UUIDMixin, TimestampMixin):
     daily_document_upload_limit = Column(Integer, nullable=True)
     max_document_size_mb = Column(Integer, default=10, nullable=False)
 
+    # SaaS Plan Information
+    plan = Column(String(50), default="free_trial", nullable=False, index=True)
+    trial_started_at = Column(DateTime, nullable=True)
+    trial_ends_at = Column(DateTime, nullable=True)
+
     # Usage Statistics (synced from Redis periodically)
     total_queries_used = Column(Integer, default=0, nullable=False)
     total_documents_uploaded = Column(Integer, default=0, nullable=False)

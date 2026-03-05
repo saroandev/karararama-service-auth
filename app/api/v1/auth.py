@@ -262,6 +262,14 @@ async def login(
     # Update last login
     await user_crud.update_last_login(db, user=user)
 
+    # Check trial expiry and update plan if needed
+    if user.plan == "free_trial" and user.trial_ends_at:
+        if datetime.utcnow() > user.trial_ends_at:
+            user.plan = "expired_trial"
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+
     # Get user roles and permissions
     roles = [role.name for role in user.roles]
     permissions = []
@@ -312,7 +320,9 @@ async def login(
             "monthly_query_limit": user.monthly_query_limit,
             "daily_document_limit": user.daily_document_upload_limit,
         },
-        "organizations": organizations  # NEW: All organizations with roles
+        "organizations": organizations,  # All organizations with roles
+        "plan": user.plan,
+        "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
     }
 
     # Create tokens
@@ -525,7 +535,9 @@ async def refresh_token(
             "monthly_query_limit": user.monthly_query_limit,
             "daily_document_limit": user.daily_document_upload_limit,
         },
-        "organizations": organizations  # NEW: All organizations with roles
+        "organizations": organizations,  # All organizations with roles
+        "plan": user.plan,
+        "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
     }
 
     # Create new tokens
