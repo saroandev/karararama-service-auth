@@ -14,6 +14,7 @@ from app.models.invitation import Invitation, InvitationStatus
 from app.models.email_verification import EmailVerification
 from app.models.organization_member import OrganizationMember
 from app.models.password_reset import PasswordResetToken
+from app.models.muvekkil import Muvekkil, muvekkil_organizations
 
 __all__ = [
     "Organization",
@@ -30,6 +31,8 @@ __all__ = [
     "EmailVerification",
     "OrganizationMember",
     "PasswordResetToken",
+    "Muvekkil",
     "user_roles",
     "role_permissions",
+    "muvekkil_organizations",
 ]

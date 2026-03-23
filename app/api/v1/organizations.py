@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.crud import organization_crud, user_crud, role_crud, invitation_crud
+from app.crud import organization_crud, user_crud, role_crud, invitation_crud, muvekkil_crud
 from app.models import User, Organization, Invitation, InvitationStatus
 from app.schemas import (
     OrganizationCreate,
@@ -23,6 +23,7 @@ from app.schemas import (
     UserResponse,
     InvitationBatchCreate,
     InvitationResponse,
+    MuvekkillResponse,
 )
 from app.api.deps import get_current_active_user, require_role
 
@@ -647,3 +648,44 @@ async def update_organization(
 
     updated_org = await organization_crud.update(db, db_obj=organization, obj_in=org_in)
     return updated_org
+
+
+@router.get("/{organization_id}/muvekkiller", response_model=List[MuvekkillResponse])
+async def get_organization_muvekkiller(
+    organization_id: UUID,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get all muvekkiller for an organization.
+
+    Raises:
+        HTTPException: If organization not found or access denied
+    """
+    organization = await organization_crud.get(db, id=organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı"
+        )
+
+    # Check if user has access to this organization
+    user_roles = [role.name.lower() for role in current_user.roles]
+    if "superuser" not in user_roles:
+        # Regular users can only view their own organization's muvekkiller
+        if str(current_user.organization_id) != str(organization_id):
+            if "admin" not in user_roles:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bu organizasyonun müvekkillerine erişim reddedildi"
+                )
+
+    muvekkiller = await muvekkil_crud.get_by_organization(
+        db,
+        organization_id=organization_id,
+        skip=skip,
+        limit=limit
+    )
+    return muvekkiller

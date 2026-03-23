@@ -124,6 +124,14 @@ async def seed_permissions(db: AsyncSession):
         ("security", "view_audit_logs", "Güvenlik logları"),
         ("security", "*", "Tüm security işlemleri"),
 
+        # Muvekkiller (Client) permissions
+        ("muvekkiller", "create", "Müvekkil oluşturma"),
+        ("muvekkiller", "read", "Müvekkil görüntüleme"),
+        ("muvekkiller", "update", "Müvekkil güncelleme"),
+        ("muvekkiller", "delete", "Müvekkil silme"),
+        ("muvekkiller", "manage_organizations", "Müvekkil organizasyon yönetimi"),
+        ("muvekkiller", "*", "Tüm müvekkil işlemleri"),
+
         # Admin permissions
         ("admin", "view_users", "Tüm kullanıcıları görüntüleme"),
         ("admin", "manage_users", "Kullanıcı yönetimi"),
@@ -183,7 +191,8 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "comments:*",
                 "integrations:*",
                 "data:*",
-                "security:*"
+                "security:*",
+                "muvekkiller:*"
             ]  # Superuser has all permissions
         },
         {
@@ -207,7 +216,8 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "comments:*",
                 "integrations:*",
                 "data:*",
-                "security:*"
+                "security:*",
+                "muvekkiller:*"
             ]  # Admin has all permissions
         },
         {
@@ -246,7 +256,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Security - Full access
                 "security:*",
                 # Admin - View only (cannot manage other admins)
-                "admin:view_users", "admin:view_analytics", "admin:view_logs"
+                "admin:view_users", "admin:view_analytics", "admin:view_logs",
+                # Muvekkiller - Full access
+                "muvekkiller:*"
             ]
         },
         {
@@ -408,7 +420,10 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "data:export", "data:import", "data:backup",
                 # Security
                 "security:view_sessions", "security:terminate_sessions",
-                "security:view_login_history", "security:manage_2fa"
+                "security:view_login_history", "security:manage_2fa",
+                # Muvekkiller - Full access
+                "muvekkiller:create", "muvekkiller:read", "muvekkiller:update",
+                "muvekkiller:delete", "muvekkiller:manage_organizations"
             ]
         },
         {
@@ -448,7 +463,10 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Data
                 "data:export", "data:backup",
                 # Security
-                "security:view_sessions", "security:view_login_history", "security:manage_2fa"
+                "security:view_sessions", "security:view_login_history", "security:manage_2fa",
+                # Muvekkiller
+                "muvekkiller:create", "muvekkiller:read", "muvekkiller:update",
+                "muvekkiller:manage_organizations"
             ]
         },
         {
@@ -486,7 +504,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Data
                 "data:export",
                 # Security
-                "security:view_sessions", "security:view_login_history", "security:manage_2fa"
+                "security:view_sessions", "security:view_login_history", "security:manage_2fa",
+                # Muvekkiller
+                "muvekkiller:create", "muvekkiller:read", "muvekkiller:update"
             ]
         },
         {
@@ -517,7 +537,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Data - Export only
                 "data:export",
                 # Security
-                "security:view_sessions", "security:manage_2fa"
+                "security:view_sessions", "security:manage_2fa",
+                # Muvekkiller - Read only
+                "muvekkiller:read"
             ]
         },
     ]
