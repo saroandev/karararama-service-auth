@@ -389,6 +389,19 @@ async def invite_users_to_organization(
             detail="Owner rolüne davet gönderilemez. Bir organizasyonun sadece 1 sahibi olabilir."
         )
 
+    # Check all emails exist in user table
+    not_found_emails = []
+    for email in invite_in.emails:
+        existing_user = await user_crud.get_by_email(db, email=email)
+        if not existing_user:
+            not_found_emails.append(email)
+
+    if not_found_emails:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sistemde böyle bir kullanıcı bulunmamaktadır."
+        )
+
     # Create invitations
     created_invitations = []
     for email in invite_in.emails:
