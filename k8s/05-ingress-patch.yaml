@@ -1,0 +1,93 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-central-1:908555131527:certificate/f447d8a7-12d5-491d-9352-7175ae6742e7
+    alb.ingress.kubernetes.io/group.name: shared-public-preprod-alb
+    alb.ingress.kubernetes.io/group.order: "30"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/load-balancer-attributes: deletion_protection.enabled=true,idle_timeout.timeout_seconds=3600
+    alb.ingress.kubernetes.io/load-balancer-name: onedocsv2-preprod-alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/tags: Name=onedocsv2-preprod-alb,Project=onedocsv2,Env=preprod
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30,stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=3600,stickiness.type=lb_cookie
+    alb.ingress.kubernetes.io/target-type: ip
+    kubectl.kubernetes.io/restartedAt: "1763230931"
+    kubernetes.io/ingress.class: alb
+    nginx.ingress.kubernetes.io/proxy-body-size: 100m
+  name: preprod-apps-ingress
+  namespace: preprod
+spec:
+  ingressClassName: alb
+  rules:
+  - host: analyzer-preprod.onedocs.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: analyzer-svc
+            port:
+              number: 8765
+        path: /
+        pathType: Prefix
+  - host: auth-preprod.onedocs.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: auth-svc
+            port:
+              number: 8001
+        path: /
+        pathType: Prefix
+  - host: karar-arama-auth-preprod.onedocs.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: karar-arama-auth-svc
+            port:
+              number: 8010
+        path: /
+        pathType: Prefix
+  - host: los.onedocs.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: crm-svc
+            port:
+              number: 3000
+        path: /
+        pathType: Prefix
+  - host: frontend-preprod.onedocs.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: frontend-svc
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  - host: knowledgebase-preprod.onedocs.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: knowledgebase-svc
+            port:
+              number: 8080
+        path: /
+        pathType: Prefix
+  - host: toolkit-preprod.onedocs.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: toolkit-svc
+            port:
+              number: 8000
+        path: /
+        pathType: Prefix

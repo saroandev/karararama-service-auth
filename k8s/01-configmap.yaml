@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: karar-arama-auth-configmap
+  namespace: preprod
+data:
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  APP_NAME: "OneDocs Karar Arama Auth Service"
+  APP_VERSION: "1.0.0"
+  BACKEND_EMAIL_CODE_EXPIRES_IN: "30"
+  BACKEND_EMAIL_CODE_LENGTH: "6"
+  BACKEND_MAIL_AUTH_USER: "dzgnil@gmail.com"
+  BACKEND_MAIL_HOST: "smtp.gmail.com"
+  BACKEND_MAIL_PORT: "587"
+  BACKEND_MAIL_SECURE: "false"
+  BACKEND_MAIL_SENDER: "noreply@onedocs.ai"
+  BACKEND_MAIL_SENDER_NAME: "OneDocs"
+  CORS_ORIGINS: "http://localhost:3000,http://localhost:8080,http://localhost:8010,https://frontend-preprod.onedocs.ai,https://karar-arama-auth-preprod.onedocs.ai"
+  DEBUG: "False"
+  EMAIL_RESEND_COOLDOWN_SECONDS: "60"
+  ENABLE_EMAIL_CODE_CONSOLE: "true"
+  FRONTEND_URL: "https://frontend-preprod.onedocs.ai"
+  HOST: "0.0.0.0"
+  JWT_ALGORITHM: "HS256"
+  PGADMIN_DEFAULT_EMAIL: "admin@onedocs.com"
+  PGADMIN_PORT: "5053"
+  PORT: "8001"
+  POSTGRES_DB: "onedocs_karar_arama_auth"
+  POSTGRES_HOST: "postgres-primary.postgres-preprod.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: "onedocs_karar_arama_auth_user"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"

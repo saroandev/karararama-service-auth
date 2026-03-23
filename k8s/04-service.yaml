@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: karar-arama-auth-svc
+  namespace: preprod
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    service.beta.kubernetes.io/aws-load-balancer-connection-draining-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-connection-draining-timeout: "30"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8002
+    protocol: TCP
+    targetPort: 8001
+  selector:
+    app: karar-arama-auth

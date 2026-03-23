@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karar-arama-auth-dep
+  namespace: preprod
+  labels:
+    app: karar-arama-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: karar-arama-auth
+  template:
+    metadata:
+      labels:
+        app: karar-arama-auth
+    spec:
+      nodeSelector:
+        Environment: preprod
+        Which: managed
+      containers:
+      - name: karar-arama-auth
+        image: 908555131527.dkr.ecr.eu-central-1.amazonaws.com/onedocsv2/preprod/auth-karararama:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8001
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: karar-arama-auth-configmap
+        - secretRef:
+            name: karar-arama-auth-secret
+        resources:
+          limits:
+            cpu: 256m
+            memory: 512Mi
+          requests:
+            cpu: 128m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
