@@ -56,5 +56,12 @@ class Organization(Base, UUIDMixin, TimestampMixin):
         lazy="select"
     )
 
+    muvekkiller = relationship(
+        "Muvekkil",
+        secondary="muvekkil_organizations",
+        back_populates="organizations",
+        lazy="select"
+    )
+
     def __repr__(self) -> str:
         return f"<Organization(id={self.id}, name={self.name})>"

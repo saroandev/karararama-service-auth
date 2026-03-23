@@ -81,6 +81,13 @@ from app.schemas.uets_account import (
     UetsAccountItem,
     UetsAccountListResponse,
 )
+from app.schemas.muvekkil import (
+    MuvekkillBase,
+    MuvekkillCreate,
+    MuvekkillUpdate,
+    MuvekkillResponse,
+    MuvekkillWithOrganizations,
+)
 
 __all__ = [
     # User
@@ -150,4 +157,10 @@ __all__ = [
     "UserOrganizationsListResponse",
     "SetPrimaryOrganizationRequest",
     "SetPrimaryOrganizationResponse",
+    # Muvekkil
+    "MuvekkillBase",
+    "MuvekkillCreate",
+    "MuvekkillUpdate",
+    "MuvekkillResponse",
+    "MuvekkillWithOrganizations",
 ]
