@@ -41,6 +41,7 @@ from app.schemas.activity_watch import (
     ErrorResponse
 )
 from app.api.deps import get_current_active_user, security
+from app.utils.email_validator import is_disposable_email
 from fastapi.security import HTTPAuthorizationCredentials
 from app.services.email import send_password_reset_email
 
@@ -85,6 +86,13 @@ async def register(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Şifreler eşleşmiyor"
+        )
+
+    # Check for disposable/temporary email
+    if is_disposable_email(user_in.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Geçici e-posta adresleri ile kayıt yapılamaz"
         )
 
     # Check if user already exists

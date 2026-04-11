@@ -66,6 +66,22 @@ class TestRegisterEndpoint:
 
         assert response.status_code == 422  # Validation error
 
+    def test_register_disposable_email(self, client: TestClient):
+        """Test registration with disposable email is rejected."""
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "test@0-mail.com",
+                "password": "securepassword123",
+                "password_confirm": "securepassword123",
+                "first_name": "Temp",
+                "last_name": "User",
+            }
+        )
+
+        assert response.status_code == 400
+        assert "Geçici e-posta" in response.json()["detail"]
+
     def test_register_missing_fields(self, client: TestClient):
         """Test registration with missing required fields."""
         response = client.post(
