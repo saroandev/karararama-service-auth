@@ -1,11 +1,19 @@
 """
 Muvekkil (Client) model for managing clients across organizations.
 """
-from sqlalchemy import Column, String, Text, Table, ForeignKey
+import enum
+
+from sqlalchemy import Column, String, Text, Table, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin, UUIDMixin, UUID
+
+
+class MuvekkilUnvan(str, enum.Enum):
+    """Muvekkil title: person or company."""
+    KISI = "kisi"
+    SIRKET = "sirket"
 
 
 # Association table for many-to-many relationship between muvekkiller and organizations
@@ -17,6 +25,15 @@ muvekkil_organizations = Table(
 )
 
 
+# Directed self-referential association: muvekkil_id -> iliskili_muvekkil_id
+muvekkil_iliskileri = Table(
+    "muvekkil_iliskileri",
+    Base.metadata,
+    Column("muvekkil_id", UUID(), ForeignKey("muvekkiller.id", ondelete="CASCADE"), primary_key=True),
+    Column("iliskili_muvekkil_id", UUID(), ForeignKey("muvekkiller.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class Muvekkil(Base, UUIDMixin, TimestampMixin):
     """
     Muvekkil (Client) model for multi-organization client management.
@@ -25,6 +42,7 @@ class Muvekkil(Base, UUIDMixin, TimestampMixin):
 
     Attributes:
         id: Unique client identifier (UUID)
+        unvan: Whether the client is a person (kisi) or a company (sirket)
         first_name: Client's first name
         last_name: Client's last name
         email: Client's email address (optional)
@@ -33,10 +51,24 @@ class Muvekkil(Base, UUIDMixin, TimestampMixin):
         city: City
         country: Country
         notes: Additional notes about the client
+        muvekkil_aciklama: Free-form description about the client
         organizations: List of organizations this client belongs to
+        iliskili_muvekkiller: Directed list of related clients (this -> others)
     """
 
     __tablename__ = "muvekkiller"
+
+    # Classification
+    unvan = Column(
+        SQLEnum(
+            MuvekkilUnvan,
+            values_callable=lambda x: [e.value for e in x],
+            native_enum=False,
+        ),
+        nullable=False,
+        default=MuvekkilUnvan.KISI,
+        server_default=MuvekkilUnvan.KISI.value,
+    )
 
     # Basic Information
     first_name = Column(String(100), nullable=False)
@@ -51,6 +83,7 @@ class Muvekkil(Base, UUIDMixin, TimestampMixin):
 
     # Notes
     notes = Column(Text, nullable=True)
+    muvekkil_aciklama = Column(Text, nullable=True)
 
     # Relationships
     organizations = relationship(
@@ -58,6 +91,14 @@ class Muvekkil(Base, UUIDMixin, TimestampMixin):
         secondary=muvekkil_organizations,
         back_populates="muvekkiller",
         lazy="selectin"
+    )
+
+    iliskili_muvekkiller = relationship(
+        "Muvekkil",
+        secondary=muvekkil_iliskileri,
+        primaryjoin="Muvekkil.id == muvekkil_iliskileri.c.muvekkil_id",
+        secondaryjoin="Muvekkil.id == muvekkil_iliskileri.c.iliskili_muvekkil_id",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

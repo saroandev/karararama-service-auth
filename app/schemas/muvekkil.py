@@ -7,9 +7,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
+from app.models.muvekkil import MuvekkilUnvan
+
 
 class MuvekkillBase(BaseModel):
     """Base muvekkil schema."""
+    unvan: MuvekkilUnvan = MuvekkilUnvan.KISI
     first_name: str
     last_name: str
     email: Optional[EmailStr] = None
@@ -18,6 +21,7 @@ class MuvekkillBase(BaseModel):
     city: Optional[str] = None
     country: Optional[str] = None
     notes: Optional[str] = None
+    muvekkil_aciklama: Optional[str] = None
 
 
 class MuvekkillCreate(MuvekkillBase):
@@ -27,6 +31,7 @@ class MuvekkillCreate(MuvekkillBase):
 
 class MuvekkillUpdate(BaseModel):
     """Muvekkil update schema."""
+    unvan: Optional[MuvekkilUnvan] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
@@ -35,6 +40,7 @@ class MuvekkillUpdate(BaseModel):
     city: Optional[str] = None
     country: Optional[str] = None
     notes: Optional[str] = None
+    muvekkil_aciklama: Optional[str] = None
 
 
 class MuvekkillResponse(MuvekkillBase):
@@ -50,6 +56,14 @@ class MuvekkillResponse(MuvekkillBase):
 class MuvekkillWithOrganizations(MuvekkillResponse):
     """Muvekkil with organizations."""
     organizations: List['OrganizationResponse'] = []
+
+    class Config:
+        from_attributes = True
+
+
+class MuvekkillWithRelations(MuvekkillResponse):
+    """Muvekkil with directed related muvekkiller."""
+    iliskili_muvekkiller: List[MuvekkillResponse] = []
 
     class Config:
         from_attributes = True

@@ -87,6 +87,7 @@ from app.schemas.muvekkil import (
     MuvekkillUpdate,
     MuvekkillResponse,
     MuvekkillWithOrganizations,
+    MuvekkillWithRelations,
 )
 from app.schemas.department import (
     DepartmentBase,
@@ -169,6 +170,7 @@ __all__ = [
     "MuvekkillUpdate",
     "MuvekkillResponse",
     "MuvekkillWithOrganizations",
+    "MuvekkillWithRelations",
     # Department
     "DepartmentBase",
     "DepartmentCreate",
