@@ -5,7 +5,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, computed_field
 
 from app.models.muvekkil import MuvekkilUnvan
 
@@ -48,6 +48,11 @@ class MuvekkillResponse(MuvekkillBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def muvekkil_id(self) -> UUID:
+        return self.id
 
     class Config:
         from_attributes = True
