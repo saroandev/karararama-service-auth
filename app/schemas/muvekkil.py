@@ -26,7 +26,7 @@ class MuvekkillBase(BaseModel):
 
 class MuvekkillCreate(MuvekkillBase):
     """Muvekkil creation schema."""
-    pass
+    organization_id: Optional[UUID] = None
 
 
 class MuvekkillUpdate(BaseModel):

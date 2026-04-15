@@ -23,28 +23,71 @@ from app.api.deps import get_current_active_user, require_role
 router = APIRouter()
 
 
-@router.post("/", response_model=MuvekkillResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=MuvekkillWithOrganizations, status_code=status.HTTP_201_CREATED)
 async def create_muvekkil(
     muvekkil_in: MuvekkillCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["admin", "superuser"]))
 ):
     """
-    Create new muvekkil (admin only).
+    Create new muvekkil and attach it to the caller's organization (admin only).
+
+    - Admin: müvekkil her zaman admin'in kendi organizasyonuna bağlanır; body'de
+      organization_id verilirse admin'in org'u ile aynı olmalıdır.
+    - Superuser: body'de organization_id zorunludur; verilen organizasyona bağlanır.
 
     Raises:
-        HTTPException: If email already exists
+        HTTPException: If email already exists or organization is invalid.
     """
-    # Check if email already exists (if provided)
-    if muvekkil_in.email:
-        existing = await muvekkil_crud.get_by_email(db, email=muvekkil_in.email)
-        if existing:
+    user_roles = [role.name.lower() for role in current_user.roles]
+    is_superuser = "superuser" in user_roles
+
+    if is_superuser:
+        if not muvekkil_in.organization_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Bu e-posta adresi zaten kayıtlı"
+                detail="Superuser müvekkil oluştururken organization_id zorunludur"
+            )
+        target_org_id = muvekkil_in.organization_id
+    else:
+        if not current_user.organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Organizasyonunuz tanımlı değil"
+            )
+        if (
+            muvekkil_in.organization_id
+            and muvekkil_in.organization_id != current_user.organization_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Sadece kendi organizasyonunuza müvekkil ekleyebilirsiniz"
+            )
+        target_org_id = current_user.organization_id
+
+    organization = await organization_crud.get(db, id=target_org_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı"
+        )
+
+    # Email uniqueness is scoped to the target organization
+    if muvekkil_in.email:
+        already_used = await muvekkil_crud.email_exists_in_organizations(
+            db,
+            email=muvekkil_in.email,
+            organization_ids=[target_org_id],
+        )
+        if already_used:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı"
             )
 
-    muvekkil = await muvekkil_crud.create(db, obj_in=muvekkil_in)
+    muvekkil = await muvekkil_crud.create(
+        db, obj_in=muvekkil_in, organization=organization
+    )
     return muvekkil
 
 
@@ -149,13 +192,18 @@ async def update_muvekkil(
                 detail="Bu müvekkili güncelleme yetkiniz yok"
             )
 
-    # Check if email already exists (if being updated)
+    # Email uniqueness is scoped to the muvekkil's organizations
     if muvekkil_in.email and muvekkil_in.email != muvekkil.email:
-        existing = await muvekkil_crud.get_by_email(db, email=muvekkil_in.email)
-        if existing:
+        already_used = await muvekkil_crud.email_exists_in_organizations(
+            db,
+            email=muvekkil_in.email,
+            organization_ids=[org.id for org in muvekkil.organizations],
+            exclude_muvekkil_id=muvekkil.id,
+        )
+        if already_used:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Bu e-posta adresi zaten kayıtlı"
+                detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı"
             )
 
     updated = await muvekkil_crud.update(db, db_obj=muvekkil, obj_in=muvekkil_in)
