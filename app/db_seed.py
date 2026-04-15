@@ -6,8 +6,8 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
-from app.crud import role_crud, permission_crud, user_crud, organization_crud
-from app.schemas import RoleCreate, PermissionCreate, UserCreate, OrganizationCreate
+from app.crud import role_crud, permission_crud, user_crud, organization_crud, department_crud
+from app.schemas import RoleCreate, PermissionCreate, UserCreate, OrganizationCreate, DepartmentCreate
 
 
 async def seed_permissions(db: AsyncSession):
@@ -637,6 +637,36 @@ async def seed_default_admin(db: AsyncSession, organization_id, admin_role_id):
         return existing_user
 
 
+async def seed_departments(db: AsyncSession):
+    """Seed default department names."""
+    department_names = [
+        "Bilişim Hukuku",
+        "Ceza Hukuku",
+        "Fikri Mülkiyet Hukuku",
+        "Gayrimenkul Hukuku",
+        "İcra İflas Hukuku",
+        "İdare Hukuku",
+        "İş Hukuku",
+        "Kira Hukuku",
+        "Perakende Hukuku",
+        "Rekabet Hukuku",
+        "Sözleşme Hukuku",
+        "Tahkim",
+        "Ticaret Hukuku",
+        "Tüketici Hukuku",
+        "Yönetici İşleri",
+        "Diğer",
+    ]
+
+    for name in department_names:
+        existing = await department_crud.get_by_name(db, name=name)
+        if not existing:
+            await department_crud.create(db, obj_in=DepartmentCreate(name=name))
+            print(f"✅ Created department: {name}")
+        else:
+            print(f"⏭️  Department already exists: {name}")
+
+
 async def seed_database():
     """Main seeding function."""
     print("🌱 Starting database seeding...")
@@ -650,6 +680,10 @@ async def seed_database():
             # Then seed roles with permissions
             print("\n👥 Seeding roles...")
             await seed_roles(db, permissions)
+
+            # Seed departments
+            print("\n🏛️  Seeding departments...")
+            await seed_departments(db)
 
             # Get admin role for default user
             admin_role = await role_crud.get_by_name(db, name="admin")
