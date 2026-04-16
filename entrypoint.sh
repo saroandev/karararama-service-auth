@@ -39,5 +39,8 @@ python -m app.db_seed
 
 echo "Database seeding completed - starting application"
 
+# Ensure appuser owns everything after root-run migrations/seed
+chown -R appuser:appuser /app
+
 # Switch to appuser and execute the main container command
 exec gosu appuser "$@"
