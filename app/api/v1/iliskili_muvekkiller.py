@@ -22,25 +22,25 @@ from app.api.deps import require_role
 router = APIRouter()
 
 
-def _resolve_org_id(current_user: User, body_org_id: UUID | None) -> UUID:
-    """Determine target organization: admin uses own, superuser requires body."""
+def _resolve_org_id(current_user: User, param_org_id: UUID | None) -> UUID:
+    """Determine target organization: admin uses own, superuser requires query param."""
     user_roles = [role.name.lower() for role in current_user.roles]
     is_superuser = "superuser" in user_roles
 
     if is_superuser:
-        if not body_org_id:
+        if not param_org_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Superuser için organization_id zorunludur",
             )
-        return body_org_id
+        return param_org_id
 
     if not current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organizasyonunuz tanımlı değil",
         )
-    if body_org_id and body_org_id != current_user.organization_id:
+    if param_org_id and param_org_id != current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Sadece kendi organizasyonunuza kayıt ekleyebilirsiniz",
@@ -62,11 +62,12 @@ def _check_org_access(current_user: User, organization_id: UUID) -> None:
 @router.post("/", response_model=IliskiliMuvekkillResponse, status_code=status.HTTP_201_CREATED)
 async def create_iliskili_muvekkil(
     data_in: IliskiliMuvekkillCreate,
+    organization_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["admin", "superuser"])),
 ):
     """Create a new iliskili muvekkil (related client)."""
-    target_org_id = _resolve_org_id(current_user, data_in.organization_id)
+    target_org_id = _resolve_org_id(current_user, organization_id)
 
     org = await organization_crud.get(db, id=target_org_id)
     if not org:
