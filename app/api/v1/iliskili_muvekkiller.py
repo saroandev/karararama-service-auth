@@ -72,11 +72,6 @@ async def create_iliskili_muvekkil(
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organizasyon bulunamadı")
 
-    if data_in.muvekkil_id:
-        muvekkil = await muvekkil_crud.get(db, id=data_in.muvekkil_id)
-        if not muvekkil:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Müvekkil bulunamadı")
-
     if data_in.email:
         exists = await iliskili_muvekkil_crud.email_exists_in_org(
             db, email=data_in.email, organization_id=target_org_id,

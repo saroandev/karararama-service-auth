@@ -25,7 +25,6 @@ class IliskiliMuvekkillBase(BaseModel):
 
 class IliskiliMuvekkillCreate(IliskiliMuvekkillBase):
     organization_id: Optional[UUID] = None
-    muvekkil_id: Optional[UUID] = None
 
 
 class IliskiliMuvekkillUpdate(BaseModel):
