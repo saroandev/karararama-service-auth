@@ -57,11 +57,22 @@ class MuvekkillUpdate(BaseModel):
     muvekkil_aciklama: Optional[str] = None
 
 
+class IliskiliMuvekkillSummary(BaseModel):
+    """Lightweight summary of an assigned iliskili muvekkil."""
+    id: UUID
+    name: str
+    unvan: MuvekkilUnvan
+
+    class Config:
+        from_attributes = True
+
+
 class MuvekkillResponse(MuvekkillBase):
     """Muvekkil response schema."""
     id: UUID
     created_at: datetime
     updated_at: datetime
+    iliskili_muvekkiller: List[IliskiliMuvekkillSummary] = []
 
     @computed_field
     @property
