@@ -1263,3 +1263,34 @@ async def reset_password(
     return ResetPasswordResponse(
         message=f"Şifreniz başarıyla güncellendi. Güvenlik nedeniyle tüm cihazlardan çıkış yapıldı ({revoked_count} oturum sonlandırıldı). Lütfen yeni şifrenizle giriş yapın."
     )
+
+
+@router.get("/lookup")
+async def lookup_user_by_email(
+    email: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public endpoint (no JWT). Returns user_id and the organization_id
+    where the user is owner. Returns 404 if user not found.
+    """
+    user = await user_crud.get_by_email(db, email=email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı",
+        )
+
+    owner_org_id = None
+    from app.crud import organization_crud as org_crud
+    from sqlalchemy import select
+    from app.models.organization import Organization
+    result = await db.execute(
+        select(Organization.id).where(Organization.owner_id == user.id).limit(1)
+    )
+    owner_org_id = result.scalar_one_or_none()
+
+    return {
+        "user_id": str(user.id),
+        "organization_id": str(owner_org_id) if owner_org_id else None,
+    }
