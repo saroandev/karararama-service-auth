@@ -5,7 +5,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, computed_field
+from pydantic import BaseModel, EmailStr, computed_field, field_validator
 
 from app.models.muvekkil import MuvekkilUnvan
 
@@ -16,6 +16,13 @@ class MuvekkillBase(BaseModel):
     first_name: str
     last_name: str
     email: Optional[EmailStr] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
     phone: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
@@ -35,6 +42,13 @@ class MuvekkillUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
     phone: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
