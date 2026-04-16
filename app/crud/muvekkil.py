@@ -77,23 +77,6 @@ class CRUDMuvekkil(CRUDBase[Muvekkil, MuvekkillCreate, MuvekkillUpdate]):
         )
         return result.scalar_one_or_none()
 
-    async def get_with_relations(
-        self,
-        db: AsyncSession,
-        *,
-        id: UUID
-    ) -> Optional[Muvekkil]:
-        """Get muvekkil with related muvekkiller and organizations loaded."""
-        result = await db.execute(
-            select(Muvekkil)
-            .options(
-                selectinload(Muvekkil.iliskili_muvekkiller),
-                selectinload(Muvekkil.organizations),
-            )
-            .where(Muvekkil.id == id)
-        )
-        return result.scalar_one_or_none()
-
     async def get_by_organization(
         self,
         db: AsyncSession,
@@ -141,38 +124,5 @@ class CRUDMuvekkil(CRUDBase[Muvekkil, MuvekkillCreate, MuvekkillUpdate]):
             await db.commit()
             await db.refresh(muvekkil)
         return muvekkil
-
-    async def add_iliskili(
-        self,
-        db: AsyncSession,
-        *,
-        muvekkil: Muvekkil,
-        iliskili: Muvekkil
-    ) -> Muvekkil:
-        """Add a directed relation muvekkil -> iliskili."""
-        if muvekkil.id == iliskili.id:
-            raise ValueError("Bir müvekkil kendisiyle ilişkilendirilemez")
-        if iliskili not in muvekkil.iliskili_muvekkiller:
-            muvekkil.iliskili_muvekkiller.append(iliskili)
-            db.add(muvekkil)
-            await db.commit()
-            await db.refresh(muvekkil)
-        return muvekkil
-
-    async def remove_iliskili(
-        self,
-        db: AsyncSession,
-        *,
-        muvekkil: Muvekkil,
-        iliskili: Muvekkil
-    ) -> Muvekkil:
-        """Remove a directed relation muvekkil -> iliskili."""
-        if iliskili in muvekkil.iliskili_muvekkiller:
-            muvekkil.iliskili_muvekkiller.remove(iliskili)
-            db.add(muvekkil)
-            await db.commit()
-            await db.refresh(muvekkil)
-        return muvekkil
-
 
 muvekkil_crud = CRUDMuvekkil(Muvekkil)

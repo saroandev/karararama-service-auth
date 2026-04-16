@@ -9,15 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.crud import muvekkil_crud, organization_crud
+from app.crud.iliskili_muvekkil import iliskili_muvekkil_crud
 from app.models import User
 from app.schemas import (
     MuvekkillCreate,
     MuvekkillUpdate,
     MuvekkillResponse,
     MuvekkillWithOrganizations,
-    MuvekkillWithRelations,
     OrganizationResponse,
 )
+from app.schemas.iliskili_muvekkil import IliskiliMuvekkillResponse
 from app.api.deps import get_current_active_user, require_role
 
 router = APIRouter()
@@ -380,106 +381,17 @@ def _check_muvekkil_org_access(
         )
 
 
-@router.post(
-    "/{muvekkil_id}/iliskili/{iliskili_muvekkil_id}",
-    response_model=MuvekkillWithRelations,
-)
-async def add_iliskili_muvekkil(
-    muvekkil_id: UUID,
-    iliskili_muvekkil_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
-):
-    """
-    Add a directed relation from muvekkil to another muvekkil.
-
-    The relation is one-way: iliskili_muvekkil_id will appear in the source's
-    related list, but not vice versa.
-    """
-    if muvekkil_id == iliskili_muvekkil_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bir müvekkil kendisiyle ilişkilendirilemez",
-        )
-
-    muvekkil = await muvekkil_crud.get_with_relations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı",
-        )
-
-    iliskili = await muvekkil_crud.get_with_organizations(db, id=iliskili_muvekkil_id)
-    if not iliskili:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="İlişkilendirilecek müvekkil bulunamadı",
-        )
-
-    _check_muvekkil_org_access(
-        muvekkil, current_user, "Bu müvekkili güncelleme yetkiniz yok"
-    )
-    _check_muvekkil_org_access(
-        iliskili, current_user, "İlişkilendirilecek müvekkile erişim yetkiniz yok"
-    )
-
-    try:
-        updated = await muvekkil_crud.add_iliskili(
-            db, muvekkil=muvekkil, iliskili=iliskili
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        )
-    return updated
-
-
-@router.delete(
-    "/{muvekkil_id}/iliskili/{iliskili_muvekkil_id}",
-    response_model=MuvekkillWithRelations,
-)
-async def remove_iliskili_muvekkil(
-    muvekkil_id: UUID,
-    iliskili_muvekkil_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
-):
-    """Remove the directed relation muvekkil -> iliskili_muvekkil."""
-    muvekkil = await muvekkil_crud.get_with_relations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı",
-        )
-
-    iliskili = await muvekkil_crud.get_with_organizations(db, id=iliskili_muvekkil_id)
-    if not iliskili:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="İlişkilendirilecek müvekkil bulunamadı",
-        )
-
-    _check_muvekkil_org_access(
-        muvekkil, current_user, "Bu müvekkili güncelleme yetkiniz yok"
-    )
-
-    updated = await muvekkil_crud.remove_iliskili(
-        db, muvekkil=muvekkil, iliskili=iliskili
-    )
-    return updated
-
-
 @router.get(
-    "/{muvekkil_id}/iliskili",
-    response_model=List[MuvekkillResponse],
+    "/{muvekkil_id}/iliskili-muvekkiller",
+    response_model=List[IliskiliMuvekkillResponse],
 )
-async def list_iliskili_muvekkiller(
+async def list_assigned_iliskili_muvekkiller(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["admin", "superuser"]))
 ):
-    """List all muvekkiller directly related from muvekkil (one-way)."""
-    muvekkil = await muvekkil_crud.get_with_relations(db, id=muvekkil_id)
+    """List iliskili muvekkiller assigned to this muvekkil."""
+    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
     if not muvekkil:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -490,4 +402,5 @@ async def list_iliskili_muvekkiller(
         muvekkil, current_user, "Bu müvekkile erişim yetkiniz yok"
     )
 
-    return muvekkil.iliskili_muvekkiller
+    results = await iliskili_muvekkil_crud.get_by_muvekkil(db, muvekkil_id=muvekkil_id)
+    return results

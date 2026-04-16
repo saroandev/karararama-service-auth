@@ -13,6 +13,7 @@ from app.crud.invitation import CRUDInvitation, invitation_crud
 from app.crud.organization_member import CRUDOrganizationMember, organization_member_crud
 from app.crud import email_verification
 from app.crud.muvekkil import CRUDMuvekkil, muvekkil_crud
+from app.crud.iliskili_muvekkil import CRUDIliskiliMuvekkil, iliskili_muvekkil_crud
 from app.crud.department import CRUDDepartment, department_crud
 
 __all__ = [
@@ -39,6 +40,8 @@ __all__ = [
     "email_verification",
     "CRUDMuvekkil",
     "muvekkil_crud",
+    "CRUDIliskiliMuvekkil",
+    "iliskili_muvekkil_crud",
     "CRUDDepartment",
     "department_crud",
 ]

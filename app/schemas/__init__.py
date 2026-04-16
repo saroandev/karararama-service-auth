@@ -87,7 +87,13 @@ from app.schemas.muvekkil import (
     MuvekkillUpdate,
     MuvekkillResponse,
     MuvekkillWithOrganizations,
-    MuvekkillWithRelations,
+)
+from app.schemas.iliskili_muvekkil import (
+    IliskiliMuvekkillBase,
+    IliskiliMuvekkillCreate,
+    IliskiliMuvekkillUpdate,
+    IliskiliMuvekkillResponse,
+    IliskiliMuvekkillAssign,
 )
 from app.schemas.department import (
     DepartmentBase,
@@ -170,7 +176,12 @@ __all__ = [
     "MuvekkillUpdate",
     "MuvekkillResponse",
     "MuvekkillWithOrganizations",
-    "MuvekkillWithRelations",
+    # Iliskili Muvekkil
+    "IliskiliMuvekkillBase",
+    "IliskiliMuvekkillCreate",
+    "IliskiliMuvekkillUpdate",
+    "IliskiliMuvekkillResponse",
+    "IliskiliMuvekkillAssign",
     # Department
     "DepartmentBase",
     "DepartmentCreate",

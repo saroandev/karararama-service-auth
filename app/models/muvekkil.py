@@ -25,14 +25,6 @@ muvekkil_organizations = Table(
 )
 
 
-# Directed self-referential association: muvekkil_id -> iliskili_muvekkil_id
-muvekkil_iliskileri = Table(
-    "muvekkil_iliskileri",
-    Base.metadata,
-    Column("muvekkil_id", UUID(), ForeignKey("muvekkiller.id", ondelete="CASCADE"), primary_key=True),
-    Column("iliskili_muvekkil_id", UUID(), ForeignKey("muvekkiller.id", ondelete="CASCADE"), primary_key=True),
-)
-
 
 class Muvekkil(Base, UUIDMixin, TimestampMixin):
     """
@@ -53,7 +45,7 @@ class Muvekkil(Base, UUIDMixin, TimestampMixin):
         notes: Additional notes about the client
         muvekkil_aciklama: Free-form description about the client
         organizations: List of organizations this client belongs to
-        iliskili_muvekkiller: Directed list of related clients (this -> others)
+        iliskili_muvekkiller: Related clients assigned to this muvekkil
     """
 
     __tablename__ = "muvekkiller"
@@ -94,11 +86,11 @@ class Muvekkil(Base, UUIDMixin, TimestampMixin):
     )
 
     iliskili_muvekkiller = relationship(
-        "Muvekkil",
-        secondary=muvekkil_iliskileri,
-        primaryjoin="Muvekkil.id == muvekkil_iliskileri.c.muvekkil_id",
-        secondaryjoin="Muvekkil.id == muvekkil_iliskileri.c.iliskili_muvekkil_id",
+        "IliskiliMuvekkil",
+        back_populates="muvekkil",
         lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     def __repr__(self) -> str:

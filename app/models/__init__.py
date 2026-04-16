@@ -14,7 +14,8 @@ from app.models.invitation import Invitation, InvitationStatus
 from app.models.email_verification import EmailVerification
 from app.models.organization_member import OrganizationMember
 from app.models.password_reset import PasswordResetToken
-from app.models.muvekkil import Muvekkil, MuvekkilUnvan, muvekkil_organizations, muvekkil_iliskileri
+from app.models.muvekkil import Muvekkil, MuvekkilUnvan, muvekkil_organizations
+from app.models.iliskili_muvekkil import IliskiliMuvekkil
 from app.models.department import Department
 
 __all__ = [
@@ -34,9 +35,9 @@ __all__ = [
     "PasswordResetToken",
     "Muvekkil",
     "MuvekkilUnvan",
+    "IliskiliMuvekkil",
     "Department",
     "user_roles",
     "role_permissions",
     "muvekkil_organizations",
-    "muvekkil_iliskileri",
 ]

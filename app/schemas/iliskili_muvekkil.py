@@ -1,7 +1,7 @@
 """
-Pydantic schemas for Muvekkil (Client).
+Pydantic schemas for IliskiliMuvekkil (Related Client).
 """
-from typing import Optional, List
+from typing import Optional
 from uuid import UUID
 from datetime import datetime
 
@@ -10,8 +10,7 @@ from pydantic import BaseModel, EmailStr, computed_field
 from app.models.muvekkil import MuvekkilUnvan
 
 
-class MuvekkillBase(BaseModel):
-    """Base muvekkil schema."""
+class IliskiliMuvekkillBase(BaseModel):
     unvan: MuvekkilUnvan = MuvekkilUnvan.KISI
     first_name: str
     last_name: str
@@ -24,13 +23,12 @@ class MuvekkillBase(BaseModel):
     muvekkil_aciklama: Optional[str] = None
 
 
-class MuvekkillCreate(MuvekkillBase):
-    """Muvekkil creation schema."""
+class IliskiliMuvekkillCreate(IliskiliMuvekkillBase):
     organization_id: Optional[UUID] = None
+    muvekkil_id: Optional[UUID] = None
 
 
-class MuvekkillUpdate(BaseModel):
-    """Muvekkil update schema."""
+class IliskiliMuvekkillUpdate(BaseModel):
     unvan: Optional[MuvekkilUnvan] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -43,29 +41,21 @@ class MuvekkillUpdate(BaseModel):
     muvekkil_aciklama: Optional[str] = None
 
 
-class MuvekkillResponse(MuvekkillBase):
-    """Muvekkil response schema."""
+class IliskiliMuvekkillResponse(IliskiliMuvekkillBase):
     id: UUID
+    organization_id: UUID
+    muvekkil_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
     @computed_field
     @property
-    def muvekkil_id(self) -> UUID:
-        return self.id
+    def atanmis(self) -> bool:
+        return self.muvekkil_id is not None
 
     class Config:
         from_attributes = True
 
 
-class MuvekkillWithOrganizations(MuvekkillResponse):
-    """Muvekkil with organizations."""
-    organizations: List['OrganizationResponse'] = []
-
-    class Config:
-        from_attributes = True
-
-
-# Forward reference resolution
-from app.schemas.organization import OrganizationResponse
-MuvekkillWithOrganizations.model_rebuild()
+class IliskiliMuvekkillAssign(BaseModel):
+    muvekkil_id: UUID
