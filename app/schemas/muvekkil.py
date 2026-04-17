@@ -91,6 +91,12 @@ class MuvekkillWithOrganizations(MuvekkillResponse):
         from_attributes = True
 
 
+class MuvekkillListResponse(BaseModel):
+    """Paginated muvekkil list with total count."""
+    total: int
+    items: List[MuvekkillResponse]
+
+
 # Forward reference resolution
 from app.schemas.organization import OrganizationResponse
 MuvekkillWithOrganizations.model_rebuild()

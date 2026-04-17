@@ -18,6 +18,7 @@ from app.schemas import (
     MuvekkillWithOrganizations,
     OrganizationResponse,
 )
+from app.schemas.muvekkil import MuvekkillListResponse
 from app.schemas.iliskili_muvekkil import IliskiliMuvekkillResponse
 from app.api.deps import get_current_active_user, require_role
 
@@ -92,7 +93,7 @@ async def create_muvekkil(
     return muvekkil
 
 
-@router.get("/", response_model=List[MuvekkillResponse])
+@router.get("/", response_model=MuvekkillListResponse)
 async def list_muvekkiller(
     skip: int = 0,
     limit: int = 100,
@@ -105,14 +106,12 @@ async def list_muvekkiller(
     Superuser can see all muvekkiller.
     Admin can only see muvekkiller from their organization.
     """
-    # Check if user is superuser
     user_roles = [role.name.lower() for role in current_user.roles]
 
     if "superuser" in user_roles:
-        # Superuser can see all muvekkiller
         muvekkiller = await muvekkil_crud.get_multi(db, skip=skip, limit=limit)
+        total = await muvekkil_crud.count_all(db)
     else:
-        # Admin can only see their organization's muvekkiller
         if not current_user.organization_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -125,8 +124,11 @@ async def list_muvekkiller(
             skip=skip,
             limit=limit
         )
+        total = await muvekkil_crud.count_by_organization(
+            db, organization_id=current_user.organization_id
+        )
 
-    return muvekkiller
+    return MuvekkillListResponse(total=total, items=muvekkiller)
 
 
 @router.get("/{muvekkil_id}", response_model=MuvekkillWithOrganizations)

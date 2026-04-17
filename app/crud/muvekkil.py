@@ -4,7 +4,7 @@ CRUD operations for Muvekkil (Client).
 from typing import List, Optional, Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -94,6 +94,18 @@ class CRUDMuvekkil(CRUDBase[Muvekkil, MuvekkillCreate, MuvekkillUpdate]):
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def count_all(self, db: AsyncSession) -> int:
+        result = await db.execute(select(func.count(Muvekkil.id)))
+        return result.scalar_one()
+
+    async def count_by_organization(self, db: AsyncSession, *, organization_id: UUID) -> int:
+        result = await db.execute(
+            select(func.count(Muvekkil.id))
+            .join(Muvekkil.organizations)
+            .where(Organization.id == organization_id)
+        )
+        return result.scalar_one()
 
     async def add_organization(
         self,
