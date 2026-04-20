@@ -49,6 +49,11 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class SwitchOrganizationRequest(BaseModel):
+    """Switch active organization request schema."""
+    organization_id: UUID
+
+
 class ForgotPasswordRequest(BaseModel):
     """Forgot password request schema."""
     email: EmailStr

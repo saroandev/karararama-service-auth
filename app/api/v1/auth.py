@@ -11,13 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import jwt_handler
 from app.core.permissions import get_data_access_for_user, get_primary_role, calculate_remaining_credits
-from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud, password_reset
+from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud, password_reset, organization_member_crud
 from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
 from app.models.invitation import InvitationStatus
 from app.schemas import (
     LoginRequest,
     RefreshTokenRequest,
+    SwitchOrganizationRequest,
     TokenResponse,
     UserCreate,
     UserResponse,
@@ -34,6 +35,7 @@ from app.schemas import (
     ResetPasswordRequest,
     ResetPasswordResponse,
 )
+from app.services.token_service import build_user_token_payload
 from app.schemas.activity_watch import (
     ActivityWatchLoginRequest,
     ActivityWatchTokenResponse,
@@ -278,60 +280,8 @@ async def login(
             await db.commit()
             await db.refresh(user)
 
-    # Get user roles and permissions
-    roles = [role.name for role in user.roles]
-    permissions = []
-    for role in user.roles:
-        for perm in role.permissions:
-            permissions.append({
-                "resource": perm.resource,
-                "action": perm.action
-            })
-
-    # Get data access permissions
-    data_access = get_data_access_for_user(user)
-
-    # Get primary role
-    primary_role = get_primary_role(user)
-
-    # Calculate remaining credits
-    today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
-    remaining_credits = calculate_remaining_credits(user, today_usage)
-
-    # Get all organizations user belongs to
-    from app.crud import organization_member_crud
-    memberships = await organization_member_crud.get_user_memberships(db, user_id=user.id)
-
-    organizations = []
-    for membership in memberships:
-        org = membership.organization
-        organizations.append({
-            "id": str(org.id),
-            "name": org.name,
-            "role": membership.role,
-            "is_primary": membership.is_primary,
-            "is_owner": org.owner_id == user.id
-        })
-
-    # Create token payload
-    token_data = {
-        "sub": str(user.id),
-        "organization_id": str(user.organization_id) if user.organization_id else None,
-        "email": user.email,
-        "role": primary_role,
-        "roles": roles,
-        "permissions": permissions,
-        "data_access": data_access,
-        "remaining_credits": remaining_credits,
-        "quotas": {
-            "daily_query_limit": user.daily_query_limit,
-            "monthly_query_limit": user.monthly_query_limit,
-            "daily_document_limit": user.daily_document_upload_limit,
-        },
-        "organizations": organizations,  # All organizations with roles
-        "plan": user.plan,
-        "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
-    }
+    # Build JWT payload (roles, permissions, quotas, organizations)
+    token_data = await build_user_token_payload(db, user)
 
     # Create tokens
     access_token = jwt_handler.create_access_token(token_data)
@@ -486,67 +436,15 @@ async def refresh_token(
         )
 
     # Get user with roles and permissions
-    user = await user_crud.get(db, id=user_id)
+    user = await user_crud.get_with_roles(db, id=user_id)
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Kullanıcı bulunamadı veya hesap aktif değil"
         )
 
-    # Get user roles and permissions
-    roles = [role.name for role in user.roles]
-    permissions = []
-    for role in user.roles:
-        for perm in role.permissions:
-            permissions.append({
-                "resource": perm.resource,
-                "action": perm.action
-            })
-
-    # Get data access permissions
-    data_access = get_data_access_for_user(user)
-
-    # Get primary role
-    primary_role = get_primary_role(user)
-
-    # Calculate remaining credits
-    today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
-    remaining_credits = calculate_remaining_credits(user, today_usage)
-
-    # Get all organizations user belongs to
-    from app.crud import organization_member_crud
-    memberships = await organization_member_crud.get_user_memberships(db, user_id=user.id)
-
-    organizations = []
-    for membership in memberships:
-        org = membership.organization
-        organizations.append({
-            "id": str(org.id),
-            "name": org.name,
-            "role": membership.role,
-            "is_primary": membership.is_primary,
-            "is_owner": org.owner_id == user.id
-        })
-
-    # Create new token payload
-    token_data = {
-        "sub": str(user.id),
-        "organization_id": str(user.organization_id) if user.organization_id else None,
-        "email": user.email,
-        "role": primary_role,
-        "roles": roles,
-        "permissions": permissions,
-        "data_access": data_access,
-        "remaining_credits": remaining_credits,
-        "quotas": {
-            "daily_query_limit": user.daily_query_limit,
-            "monthly_query_limit": user.monthly_query_limit,
-            "daily_document_limit": user.daily_document_upload_limit,
-        },
-        "organizations": organizations,  # All organizations with roles
-        "plan": user.plan,
-        "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
-    }
+    # Build JWT payload (roles, permissions, quotas, organizations)
+    token_data = await build_user_token_payload(db, user)
 
     # Create new tokens
     new_access_token = jwt_handler.create_access_token(token_data)
@@ -619,6 +517,97 @@ async def logout(
         "message": "Başarıyla çıkış yapıldı",
         "sessions_terminated": revoked_count
     }
+
+
+@router.post("/switch-organization", response_model=TokenResponse)
+async def switch_organization(
+    request: SwitchOrganizationRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+) -> TokenResponse:
+    """
+    Switch the user's active organization and rotate their JWT.
+
+    Validates that the user is a member of the target organization, marks it
+    as primary (updating user.organization_id and is_primary flags), blacklists
+    the current access token, revokes all refresh tokens, and issues a fresh
+    access/refresh token pair scoped to the new active organization.
+    """
+    # Verify membership
+    membership = await organization_member_crud.get_membership(
+        db,
+        user_id=current_user.id,
+        organization_id=request.organization_id
+    )
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu organizasyona üye değilsiniz"
+        )
+
+    # Verify organization is active
+    target_org = await organization_crud.get(db, id=request.organization_id)
+    if not target_org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı"
+        )
+    if not target_org.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organizasyon aktif değil"
+        )
+
+    # Blacklist the current access token before rotating
+    old_access_token = credentials.credentials
+    try:
+        old_payload = jwt_handler.decode_token(old_access_token)
+        old_expires_at = datetime.fromtimestamp(old_payload.get("exp"))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Geçersiz token"
+        )
+
+    await blacklisted_token_crud.add_to_blacklist(
+        db=db,
+        token=old_access_token,
+        user_id=current_user.id,
+        expires_at=old_expires_at,
+        reason="organization_switch"
+    )
+
+    # Revoke all refresh tokens to invalidate previous sessions
+    await refresh_token_crud.revoke_all_user_tokens(db, current_user.id)
+
+    # Mark target organization as primary (also updates user.organization_id)
+    await organization_member_crud.set_primary(
+        db,
+        user_id=current_user.id,
+        organization_id=request.organization_id
+    )
+
+    # Reload the user so token payload reflects the new active organization
+    user = await user_crud.get_with_roles(db, id=current_user.id)
+
+    # Issue new tokens
+    token_data = await build_user_token_payload(db, user)
+    new_access_token = jwt_handler.create_access_token(token_data)
+    new_refresh_token = jwt_handler.create_refresh_token({"sub": str(user.id)})
+
+    await refresh_token_crud.create(
+        db=db,
+        user_id=user.id,
+        token=new_refresh_token,
+        device_info=None
+    )
+
+    return TokenResponse(
+        access_token=new_access_token,
+        refresh_token=new_refresh_token,
+        token_type="bearer"
+    )
 
 
 @router.post("/verify-email/{email}")
