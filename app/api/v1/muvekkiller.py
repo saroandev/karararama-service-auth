@@ -98,13 +98,13 @@ async def list_muvekkiller(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
-    List muvekkiller (admin only).
+    List muvekkiller.
 
     Superuser can see all muvekkiller.
-    Admin can only see muvekkiller from their organization.
+    Other authenticated users see muvekkiller from their active organization.
     """
     user_roles = [role.name.lower() for role in current_user.roles]
 
