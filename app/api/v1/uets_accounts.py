@@ -102,10 +102,9 @@ async def list_connected_accounts(
             detail="Kullanıcının bir organizasyona atanması gerekiyor"
         )
 
-    accounts = await uets_account_crud.get_by_user(
+    accounts = await uets_account_crud.get_by_org(
         db,
-        org_id=current_user.organization_id,
-        user_id=current_user.id
+        org_id=current_user.organization_id
     )
 
     return UetsAccountListResponse(

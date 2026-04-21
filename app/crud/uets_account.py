@@ -78,6 +78,29 @@ class CRUDUetsAccount:
         )
         return list(result.scalars().all())
 
+    async def get_by_org(
+        self,
+        db: AsyncSession,
+        *,
+        org_id: UUID
+    ) -> List[UetsAccount]:
+        """
+        Get all UETS accounts connected within an organization.
+
+        Args:
+            db: Database session
+            org_id: Organization ID
+
+        Returns:
+            List of UetsAccount instances for the whole organization
+        """
+        result = await db.execute(
+            select(UetsAccount)
+            .where(UetsAccount.org_id == org_id)
+            .order_by(UetsAccount.created_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def get(
         self,
         db: AsyncSession,
