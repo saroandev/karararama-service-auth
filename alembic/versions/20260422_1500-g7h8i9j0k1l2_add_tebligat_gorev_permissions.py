@@ -48,7 +48,7 @@ ROLE_PERMISSION_ASSIGNMENTS = [
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
+    conn = op.get_bind()
 
     insert_permission_sql = text(
         """
@@ -62,7 +62,7 @@ def upgrade() -> None:
         """
     )
     for resource, action, description in PERMISSIONS:
-        bind.execute(
+        conn.execute(
             insert_permission_sql,
             {"resource": resource, "action": action, "description": description},
         )
@@ -82,16 +82,16 @@ def upgrade() -> None:
         """
     )
     for role_name, resource, action in ROLE_PERMISSION_ASSIGNMENTS:
-        bind.execute(
+        conn.execute(
             assign_role_permission_sql,
             {"role_name": role_name, "resource": resource, "action": action},
         )
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
+    conn = op.get_bind()
 
-    bind.execute(
+    conn.execute(
         text(
             """
             DELETE FROM role_permissions
@@ -103,7 +103,7 @@ def downgrade() -> None:
         )
     )
 
-    bind.execute(
+    conn.execute(
         text(
             """
             DELETE FROM permissions
