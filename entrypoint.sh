@@ -22,14 +22,16 @@ done
 echo "PostgreSQL is up - executing migrations"
 
 # Check for multiple heads and merge if necessary
-HEAD_COUNT=$(alembic heads 2>&1 | grep -c "^[a-f0-9]")
+HEAD_COUNT=$(alembic heads 2>&1 | grep -c "^[a-f0-9]" || true)
+echo "Alembic head count: $HEAD_COUNT"
 if [ "$HEAD_COUNT" -gt 1 ]; then
     echo "Multiple heads detected, creating merge migration..."
     alembic merge -m "auto_merge_heads" heads
 fi
 
 # Run database migrations
-alembic upgrade head
+echo "Running alembic upgrade head..."
+alembic upgrade head 2>&1 || { echo "MIGRATION FAILED"; exit 1; }
 
 echo "Migrations completed - seeding database"
 
