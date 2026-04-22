@@ -18,12 +18,12 @@ from app.models.user import user_roles
 
 
 async def get_active_org_roles(db: AsyncSession, user: User) -> List[Role]:
-    """Return roles assigned in the user's currently active organization.
+    """Return roles assigned to the user scoped to their active organization.
 
-    Includes roles whose user_roles.organization_id matches user.organization_id
-    OR is NULL (system/global roles like superuser/admin that are not scoped to
-    a specific organization). Users without an active organization fall back to
-    all of their roles.
+    After the user_roles org-required refactor every user_roles row has an
+    organization_id, so a user without an active organization indicates a
+    data-integrity regression; we fall back to relationship-loaded roles in
+    that case rather than raise.
     """
     if user.organization_id is None:
         return list(user.roles)
@@ -32,10 +32,7 @@ async def get_active_org_roles(db: AsyncSession, user: User) -> List[Role]:
         select(Role)
         .join(user_roles, user_roles.c.role_id == Role.id)
         .where(user_roles.c.user_id == user.id)
-        .where(
-            (user_roles.c.organization_id == user.organization_id)
-            | (user_roles.c.organization_id.is_(None))
-        )
+        .where(user_roles.c.organization_id == user.organization_id)
         .options(selectinload(Role.permissions))
     )
     result = await db.execute(stmt)

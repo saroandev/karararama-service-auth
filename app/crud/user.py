@@ -5,12 +5,14 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, insert, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.base import CRUDBase
-from app.models import User, Role
+from app.models import Role, User
+from app.models.user import user_roles as user_roles_table
 from app.schemas import UserCreate, UserUpdate
 from app.core.security import password_handler
 
@@ -71,23 +73,16 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         obj_in: UserCreate
     ) -> User:
         """
-        Create new user with hashed password and default 'guest' role.
+        Create new user with hashed password.
 
-        Args:
-            db: Database session
-            obj_in: User creation schema
-
-        Returns:
-            Created user instance
+        Role assignment is handled by the register endpoint (personal org + owner)
+        or by invitation acceptance flows — this method does not assign any role.
         """
-        # Hash password
         hashed_password = password_handler.hash_password(obj_in.password)
 
-        # Create user dict without password, password_confirm, and consent booleans
         user_data = obj_in.model_dump(exclude={"password", "password_confirm", "agree_kvkk", "agree_cookies", "agree_privacy"})
         user_data["password_hash"] = hashed_password
 
-        # Convert consent booleans to timestamps
         from datetime import datetime, timedelta
         if obj_in.agree_kvkk:
             user_data["kvkk_consent_at"] = datetime.utcnow()
@@ -103,28 +98,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
         db_obj = User(**user_data)
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
-
-        # Assign default 'guest' role
-        result = await db.execute(
-            select(Role).where(Role.name == "guest")
-        )
-        guest_role = result.scalar_one_or_none()
-
-        if guest_role:
-            # Reload user with roles relationship
-            result = await db.execute(
-                select(User)
-                .where(User.id == db_obj.id)
-                .options(selectinload(User.roles))
-            )
-            user_with_roles = result.scalar_one()
-            user_with_roles.roles.append(guest_role)
-            await db.commit()
-
-        # Return user without roles loaded (for response serialization)
-        await db.refresh(db_obj)
+        await db.flush()
         return db_obj
 
     async def authenticate(
@@ -187,24 +161,23 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         db: AsyncSession,
         *,
         user: User,
-        role
+        role: Role,
+        organization_id: UUID,
     ) -> User:
         """
-        Add role to user. Only adds if not already assigned.
+        Grant role to user scoped to a specific organization.
 
-        Args:
-            db: Database session
-            user: User instance
-            role: Role instance
-
-        Returns:
-            Updated user instance
+        Uses an upsert so repeated calls are idempotent. Does not commit —
+        caller is responsible for the transaction boundary.
         """
-        if role not in user.roles:
-            user.roles.append(role)
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
+        stmt = (
+            pg_insert(user_roles_table)
+            .values(user_id=user.id, role_id=role.id, organization_id=organization_id)
+            .on_conflict_do_nothing(
+                index_elements=["user_id", "role_id", "organization_id"]
+            )
+        )
+        await db.execute(stmt)
         return user
 
     async def remove_role(
@@ -212,23 +185,20 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         db: AsyncSession,
         *,
         user: User,
-        role
+        role: Role,
+        organization_id: UUID,
     ) -> User:
         """
-        Remove role from user.
+        Revoke role from user in a specific organization.
 
-        Args:
-            db: Database session
-            user: User instance
-            role: Role instance
-
-        Returns:
-            Updated user instance
+        Does not commit — caller manages the transaction boundary.
         """
-        user.roles.remove(role)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+        stmt = delete(user_roles_table).where(
+            user_roles_table.c.user_id == user.id,
+            user_roles_table.c.role_id == role.id,
+            user_roles_table.c.organization_id == organization_id,
+        )
+        await db.execute(stmt)
         return user
 
 

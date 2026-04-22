@@ -98,8 +98,8 @@ async def accept_invitation(
         )
 
         if not existing_membership:
-            # Create new membership - don't replace their current organization!
-            # Set as primary only if user has no primary organization
+            # Create new membership. Keep user's current primary org; this is
+            # an additional membership, not a replacement.
             has_primary = user_with_roles.organization_id is not None
 
             await organization_member_crud.create(
@@ -107,28 +107,26 @@ async def accept_invitation(
                 user_id=user.id,
                 organization_id=invitation.organization_id,
                 role=invitation.role,
-                is_primary=not has_primary  # Primary only if no existing org
+                is_primary=not has_primary,
             )
 
-            # If user had no primary org, set this as their primary
             if not has_primary:
                 user_with_roles.organization_id = invitation.organization_id
                 db.add(user_with_roles)
-                await db.commit()
 
-        # Get the role from invitation
+        # Add invitation role scoped to the invited organization
         role = await role_crud.get_by_name(db, name=invitation.role)
         if role:
-            # Remove guest role if exists
-            guest_roles = [r for r in user_with_roles.roles if r.name.lower() == "guest"]
-            for guest_role in guest_roles:
-                await user_crud.remove_role(db, user=user_with_roles, role=guest_role)
-
-            # Add new role
-            await user_crud.add_role(db, user=user_with_roles, role=role)
+            await user_crud.add_role(
+                db,
+                user=user_with_roles,
+                role=role,
+                organization_id=invitation.organization_id,
+            )
 
         # Mark invitation as accepted
         await invitation_crud.mark_accepted(db, invitation=invitation)
+        await db.commit()
 
         print(f"✅ Davet kabul edildi:")
         print(f"   User: {user.email}")

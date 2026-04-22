@@ -362,46 +362,6 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "security:view_sessions", "security:terminate_sessions", "security:view_login_history"
             ]
         },
-        {
-            "name": "demo",
-            "description": "Demo kullanıcı - sınırlı erişim",
-            "default_daily_query_limit": 10,
-            "default_monthly_query_limit": 200,
-            "default_daily_document_limit": 5,
-            "default_max_document_size_mb": 5,
-            "permissions": [
-                # Auth
-                "auth:login", "auth:logout",
-                # Users - Read only
-                "users:read",
-                # Documents - Limited
-                "documents:upload", "documents:read", "documents:search", "documents:extract",
-                # Research - Limited
-                "research:query", "research:history",
-                # Usage
-                "usage:view_own", "usage:view_quotas",
-                # Notifications
-                "notifications:read", "notifications:mark_read"
-            ]
-        },
-        {
-            "name": "guest",
-            "description": "Misafir kullanıcı - çok sınırlı",
-            "default_daily_query_limit": 3,
-            "default_monthly_query_limit": 30,
-            "default_daily_document_limit": 0,
-            "default_max_document_size_mb": 1,  # Minimum 1 MB required
-            "permissions": [
-                # Auth
-                "auth:login", "auth:logout",
-                # Users - Read only
-                "users:read",
-                # Research - Only query
-                "research:query",
-                # Usage
-                "usage:view_own"
-            ]
-        },
         # ============================================================================
         # LEGAL ORGANIZATION ROLES (for law firms and legal departments)
         # These roles are used within organizations for legal team members
@@ -646,10 +606,16 @@ async def seed_default_admin(db: AsyncSession, organization_id, admin_role_id):
         await db.commit()
         await db.refresh(user)
 
-        # Assign admin role
+        # Assign admin role scoped to the assigned organization
         admin_role = await role_crud.get(db, id=admin_role_id)
         if admin_role:
-            await user_crud.add_role(db, user=user, role=admin_role)
+            await user_crud.add_role(
+                db,
+                user=user,
+                role=admin_role,
+                organization_id=organization_id,
+            )
+            await db.commit()
             print(f"  ➕ Added admin role to user")
 
         print(f"✅ Created admin user: {user.email}")

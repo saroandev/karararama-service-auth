@@ -153,28 +153,27 @@ async def assign_role_to_user(
                 detail="Sadece superuser'lar superuser rolü atayabilir"
             )
 
-    # Remove all existing roles (each user can have only one role)
+    # Remove existing role assignments scoped to this organization (one role
+    # per user per org). Roles held in other organizations are untouched.
     for existing_role in list(user.roles):
-        await user_crud.remove_role(db, user=user, role=existing_role)
+        await user_crud.remove_role(
+            db,
+            user=user,
+            role=existing_role,
+            organization_id=user.organization_id,
+        )
 
-    # Reload user to get fresh state
-    user = await user_crud.get_with_roles(db, id=user_id)
-
-    # Add new role to user
-    await user_crud.add_role(db, user=user, role=role)
-
-    # Update user_roles with organization_id
-    from sqlalchemy import text
-    update_query = text("""
-        UPDATE user_roles
-        SET organization_id = :org_id
-        WHERE user_id = :user_id AND role_id = :role_id
-    """)
-    await db.execute(
-        update_query,
-        {"org_id": user.organization_id, "user_id": user.id, "role_id": role.id}
+    # Assign the new role, scoped atomically to the user's organization.
+    await user_crud.add_role(
+        db,
+        user=user,
+        role=role,
+        organization_id=user.organization_id,
     )
     await db.commit()
+
+    # Reload user with fresh role relationships
+    user = await user_crud.get_with_roles(db, id=user_id)
 
     # Update user quotas based on role defaults
     # Always update to match the role's default values
@@ -259,8 +258,14 @@ async def remove_role_from_user(
             detail="Kullanıcının bu rolü yok"
         )
 
-    # Remove role from user
-    await user_crud.remove_role(db, user=user, role=role)
+    # Remove role from user in their active organization
+    await user_crud.remove_role(
+        db,
+        user=user,
+        role=role,
+        organization_id=user.organization_id,
+    )
+    await db.commit()
 
     # Refresh and return user with roles
     updated_user = await user_crud.get_with_roles(db, id=user_id)
@@ -475,9 +480,14 @@ async def remove_user_from_organization(
             detail="Admin kullanıcılar organizasyondan çıkarılamaz"
         )
 
-    # Remove all roles first
+    # Remove all role assignments scoped to this organization
     for role in list(user.roles):
-        await user_crud.remove_role(db, user=user, role=role)
+        await user_crud.remove_role(
+            db,
+            user=user,
+            role=role,
+            organization_id=user.organization_id,
+        )
 
     # Remove organization
     user.organization_id = None

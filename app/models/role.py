@@ -26,7 +26,7 @@ class Role(Base, UUIDMixin):
 
     Attributes:
         id: Unique role identifier (UUID)
-        name: Role name (e.g., 'admin', 'user', 'demo', 'guest')
+        name: Role name (e.g., 'admin', 'owner', 'lawyer')
         description: Role description
         default_daily_query_limit: Default daily query limit for this role
         default_monthly_query_limit: Default monthly query limit

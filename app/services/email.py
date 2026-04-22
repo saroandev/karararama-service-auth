@@ -336,7 +336,6 @@ ROLE_DISPLAY_NAMES = {
     "trainee": "Stajyer Avukat",
     "admin": "Admin",
     "user": "Kullanıcı",
-    "guest": "Misafir",
 }
 
 # Organization type display names

@@ -36,6 +36,7 @@ from app.schemas import (
     ResetPasswordResponse,
 )
 from app.services.token_service import build_user_token_payload, get_active_org_roles
+from app.services.user_onboarding import create_personal_organization
 from app.schemas.activity_watch import (
     ActivityWatchLoginRequest,
     ActivityWatchTokenResponse,
@@ -64,24 +65,12 @@ async def register(
     """
     Register a new user.
 
-    Creates a new user with default 'guest' role.
-    Guest users can login immediately with limited permissions.
+    Every new user is automatically provisioned with a personal organization
+    (named after them) and granted the 'owner' role in that organization.
 
-    If invitation_token is provided:
-        - Validates the invitation
-        - Assigns organization and role from invitation
-        - Marks invitation as accepted
-
-    Args:
-        user_in: User registration data (first_name, last_name, email, password, password_confirm).
-        db: Database session
-        invitation_token: Optional invitation token (query parameter)
-
-    Returns:
-        Created user with assigned role and organization
-
-    Raises:
-        HTTPException: If email already exists, passwords don't match, or invitation invalid
+    If invitation_token is provided, the user additionally joins the invited
+    organization with the invitation role as a second membership, and the
+    invited organization is set as primary (active).
     """
     # Check if passwords match
     if not user_in.validate_passwords():
@@ -141,47 +130,58 @@ async def register(
                 detail="E-posta adresi davet ile eşleşmiyor"
             )
 
-    # Create user using CRUD (handles hashing, consent timestamps, and default values)
+    # Create user
     user = await user_crud.create(db, obj_in=user_in)
 
-    # Process invitation if exists
-    if invitation:
-        # Create membership in organization_members table
-        from app.crud import organization_member_crud
+    # Provision personal organization (always). Invited users get this as a
+    # secondary membership so they always have their own owned org.
+    personal_org = await create_personal_organization(db, user)
 
+    owner_role = await role_crud.get_by_name(db, name="owner")
+    if not owner_role:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Owner rolü bulunamadı. Lütfen seed işlemini çalıştırın."
+        )
+
+    is_invited = invitation is not None
+
+    # Personal membership. is_primary is True only when there's no invitation.
+    await organization_member_crud.create(
+        db,
+        user_id=user.id,
+        organization_id=personal_org.id,
+        role="owner",
+        is_primary=not is_invited,
+    )
+    await user_crud.add_role(db, user=user, role=owner_role, organization_id=personal_org.id)
+    user.organization_id = personal_org.id
+    db.add(user)
+
+    if is_invited:
+        # Secondary membership in the invited organization; invited org is primary.
         await organization_member_crud.create(
             db,
             user_id=user.id,
             organization_id=invitation.organization_id,
             role=invitation.role,
-            is_primary=True  # First organization is always primary for new users
+            is_primary=True,
         )
-
-        # Set organization as user's primary org
-        user.organization_id = invitation.organization_id
-        db.add(user)
-        await db.commit()
-
-        # Get role from invitation
         invited_role = await role_crud.get_by_name(db, name=invitation.role)
         if invited_role:
-            await user_crud.add_role(db, user=user, role=invited_role)
-
-        # Mark invitation as accepted
+            await user_crud.add_role(
+                db,
+                user=user,
+                role=invited_role,
+                organization_id=invitation.organization_id,
+            )
+        user.organization_id = invitation.organization_id
+        db.add(user)
         await invitation_crud.mark_accepted(db, invitation=invitation)
 
-        print(f"✅ Kullanıcı davet ile kaydoldu:")
-        print(f"   Email: {user.email}")
-        print(f"   Organization ID: {invitation.organization_id}")
-        print(f"   Role: {invitation.role}")
-    else:
-        # Assign default 'guest' role
-        guest_role = await role_crud.get_by_name(db, name="guest")
+    await db.commit()
 
-        if guest_role:
-            await user_crud.add_role(db, user=user, role=guest_role)
-
-    # Reload user with all relationships
+    # Reload user with all relationships for response
     user = await user_crud.get_with_roles(db, id=user.id)
 
     # Send verification email automatically
@@ -259,11 +259,9 @@ async def login(
             detail="Hesabınız rol ataması bekliyor. Lütfen yönetici ile iletişime geçin."
         )
 
-    # Check organization assignment (except for guest/demo users)
-    role_names = [role.name.lower() for role in user.roles]
-    is_guest_or_demo = "guest" in role_names or "demo" in role_names
-
-    if not user.organization_id and not is_guest_or_demo:
+    # Every user is provisioned with a personal organization at registration;
+    # this defensive check catches data-integrity regressions.
+    if not user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Hesabınız organizasyon ataması bekliyor. Lütfen yönetici ile iletişime geçin."

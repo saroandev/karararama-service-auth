@@ -27,11 +27,6 @@ DATA_ACCESS_BY_ROLE = {
         "shared_data": True,
         "all_users_data": False
     },
-    "guest": {
-        "own_data": False,
-        "shared_data": False,
-        "all_users_data": False
-    }
 }
 
 
@@ -67,10 +62,6 @@ def get_data_access_for_user(user: User, roles: Optional[Iterable[Role]] = None)
     if "viewer" in role_names:
         return DATA_ACCESS_BY_ROLE["viewer"]
 
-    # Guest users get no access
-    if "guest" in role_names or "demo" in role_names:
-        return DATA_ACCESS_BY_ROLE["guest"]
-
     # Default: member access
     return DATA_ACCESS_BY_ROLE["member"]
 
@@ -79,7 +70,7 @@ def get_primary_role(user: User, roles: Optional[Iterable[Role]] = None) -> str:
     """
     Get the primary (most privileged) role for a user.
 
-    Role hierarchy: superuser > admin > member/user > viewer > guest/demo
+    Role hierarchy: superuser > admin > member/user > viewer
 
     Args:
         user: User model instance
@@ -102,8 +93,6 @@ def get_primary_role(user: User, roles: Optional[Iterable[Role]] = None) -> str:
         return "member"
     if "viewer" in role_names:
         return "viewer"
-    if "guest" in role_names or "demo" in role_names:
-        return "guest"
 
     # Default
     return "member"

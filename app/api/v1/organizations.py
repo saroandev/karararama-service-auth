@@ -38,7 +38,7 @@ async def create_organization(
     """
     Create a new organization (PUBLIC endpoint - no auth required).
 
-    User is found by email. User becomes the owner and their role is upgraded from guest to owner.
+    User is found by email. User becomes the owner of the new organization.
     A user can only own ONE organization.
 
     Args:
@@ -67,21 +67,19 @@ async def create_organization(
     if existing_org:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Kullanıcı zaten bir organizasyona sahip. Bir kullanıcı sadece 1 organizasyon oluşturabilir."
+            detail="Zaten sahip olduğunuz bir organizasyon var."
         )
 
-    # Create organization directly (not using CRUD to avoid schema issues)
+    # Create organization
     organization = Organization(
         name=org_in.name,
         owner_id=user.id,
         organization_type=org_in.organization_type,
-        organization_size=org_in.organization_size
+        organization_size=org_in.organization_size,
     )
     db.add(organization)
-    await db.commit()
-    await db.refresh(organization)
+    await db.flush()
 
-    # Create owner membership in organization_members table
     from app.crud import organization_member_crud
 
     await organization_member_crud.create(
@@ -89,21 +87,12 @@ async def create_organization(
         user_id=user.id,
         organization_id=organization.id,
         role="owner",
-        is_primary=True  # Organization they create is always their primary
+        is_primary=True,
     )
 
-    # Update user's organization_id (for backward compatibility)
     user.organization_id = organization.id
     db.add(user)
-    await db.commit()
 
-    # Upgrade user role from guest to owner
-    # Get roles with relationships loaded
-    stmt = select(User).where(User.id == user.id).options(selectinload(User.roles))
-    result = await db.execute(stmt)
-    user_with_roles = result.scalar_one()
-
-    # Get owner role
     owner_role = await role_crud.get_by_name(db, name="owner")
     if not owner_role:
         raise HTTPException(
@@ -111,21 +100,13 @@ async def create_organization(
             detail="Owner role bulunamadı. Lütfen database seed işlemini çalıştırın."
         )
 
-    # Remove guest role if exists
-    guest_roles = [role for role in user_with_roles.roles if role.name.lower() == "guest"]
-    for guest_role in guest_roles:
-        await user_crud.remove_role(db, user=user_with_roles, role=guest_role)
-
-    # Add owner role
-    await user_crud.add_role(db, user=user_with_roles, role=owner_role)
-
-    print(f"✅ Organization created:")
-    print(f"   Name: {organization.name}")
-    print(f"   Owner: {user.email}")
-    print(f"   Type: {org_in.organization_type}")
-    print(f"   Size: {org_in.organization_size}")
-
-    # Refresh organization to return
+    await user_crud.add_role(
+        db,
+        user=user,
+        role=owner_role,
+        organization_id=organization.id,
+    )
+    await db.commit()
     await db.refresh(organization)
     return organization
 
