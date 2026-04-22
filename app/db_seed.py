@@ -143,6 +143,24 @@ async def seed_permissions(db: AsyncSession):
         ("admin", "bulk_operations", "Toplu işlemler"),
         ("admin", "maintenance", "Sistem bakımı"),
         ("admin", "*", "Tüm admin işlemleri"),
+
+        # Tebligat permissions
+        ("tebligat", "goruntule", "Tebligat görüntüleme"),
+        ("tebligat", "senkronize", "Harici tebligat servisinden senkronizasyon (batch, detay, ek yükleme)"),
+        ("tebligat", "*", "Tüm tebligat işlemleri"),
+
+        # Görev permissions
+        ("gorev", "goruntule", "Görev görüntüleme"),
+        ("gorev", "durum-guncelle", "Görev durumunu güncelleme"),
+        ("gorev", "atama-ekle", "Göreve atama ekleme"),
+        ("gorev", "atama-sil", "Görevden atama silme"),
+        ("gorev", "senkronize", "Tebligatlardan görev oluşturma senkronizasyonu"),
+        ("gorev", "*", "Tüm görev işlemleri"),
+
+        # Görev-Kural permissions
+        ("gorev-kural", "goruntule", "Görev kurallarını görüntüleme"),
+        ("gorev-kural", "yonet", "Görev kurallarını yönetme (oluştur/güncelle/sil)"),
+        ("gorev-kural", "*", "Tüm görev-kural işlemleri"),
     ]
 
     permissions = {}
@@ -258,7 +276,10 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Admin - View only (cannot manage other admins)
                 "admin:view_users", "admin:view_analytics", "admin:view_logs",
                 # Muvekkiller - Full access
-                "muvekkiller:*"
+                "muvekkiller:*",
+                # Tebligat & Görev - Sync only (owner coordinates external sync)
+                "tebligat:senkronize",
+                "gorev:senkronize"
             ]
         },
         {
@@ -466,7 +487,11 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "security:view_sessions", "security:view_login_history", "security:manage_2fa",
                 # Muvekkiller
                 "muvekkiller:create", "muvekkiller:read", "muvekkiller:update",
-                "muvekkiller:manage_organizations"
+                "muvekkiller:manage_organizations",
+                # Görev - Ekip yönetimi (atama + durum)
+                "gorev:durum-guncelle",
+                "gorev:atama-ekle",
+                "gorev:atama-sil"
             ]
         },
         {

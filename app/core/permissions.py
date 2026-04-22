@@ -1,8 +1,8 @@
 """
 Permission and data access control utilities.
 """
-from typing import List, Optional
-from app.models import User
+from typing import Iterable, List, Optional
+from app.models import Role, User
 
 
 # Role-based data access mapping
@@ -35,18 +35,21 @@ DATA_ACCESS_BY_ROLE = {
 }
 
 
-def get_data_access_for_user(user: User) -> dict:
+def get_data_access_for_user(user: User, roles: Optional[Iterable[Role]] = None) -> dict:
     """
     Get data access permissions for a user based on their roles.
 
     Args:
         user: User model instance
+        roles: Optional explicit role list. When provided (e.g. scoped to the
+            user's active organization), this replaces user.roles for the
+            computation. Falls back to user.roles when omitted.
 
     Returns:
         Dictionary with own_data, shared_data, all_users_data flags
     """
-    # Get all role names
-    role_names = [role.name.lower() for role in user.roles]
+    source_roles = roles if roles is not None else user.roles
+    role_names = [role.name.lower() for role in source_roles]
 
     # Superuser users get full access
     if "superuser" in role_names:
@@ -72,7 +75,7 @@ def get_data_access_for_user(user: User) -> dict:
     return DATA_ACCESS_BY_ROLE["member"]
 
 
-def get_primary_role(user: User) -> str:
+def get_primary_role(user: User, roles: Optional[Iterable[Role]] = None) -> str:
     """
     Get the primary (most privileged) role for a user.
 
@@ -80,11 +83,15 @@ def get_primary_role(user: User) -> str:
 
     Args:
         user: User model instance
+        roles: Optional explicit role list. When provided (e.g. scoped to the
+            user's active organization), this replaces user.roles for the
+            computation. Falls back to user.roles when omitted.
 
     Returns:
         Primary role name
     """
-    role_names = [role.name.lower() for role in user.roles]
+    source_roles = roles if roles is not None else user.roles
+    role_names = [role.name.lower() for role in source_roles]
 
     # Check in priority order
     if "superuser" in role_names:
