@@ -35,7 +35,7 @@ from app.schemas import (
     ResetPasswordRequest,
     ResetPasswordResponse,
 )
-from app.services.token_service import build_user_token_payload
+from app.services.token_service import build_user_token_payload, get_active_org_roles
 from app.schemas.activity_watch import (
     ActivityWatchLoginRequest,
     ActivityWatchTokenResponse,
@@ -337,10 +337,11 @@ async def verify_token(
     Returns:
         Token validation result with user info, roles, permissions, and quotas
     """
-    # Get user roles and permissions
-    roles = [role.name for role in current_user.roles]
+    # Get user roles and permissions scoped to the active organization
+    active_roles = await get_active_org_roles(db, current_user)
+    roles = [role.name for role in active_roles]
     permissions = []
-    for role in current_user.roles:
+    for role in active_roles:
         for perm in role.permissions:
             perm_dict = {
                 "resource": perm.resource,
@@ -350,10 +351,10 @@ async def verify_token(
                 permissions.append(perm_dict)
 
     # Get data access permissions
-    data_access = get_data_access_for_user(current_user)
+    data_access = get_data_access_for_user(current_user, roles=active_roles)
 
     # Get primary role
-    primary_role = get_primary_role(current_user)
+    primary_role = get_primary_role(current_user, roles=active_roles)
 
     # Calculate remaining credits
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=current_user.id)

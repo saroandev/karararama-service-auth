@@ -1,9 +1,11 @@
 """
 Token payload builder shared by login, refresh, and switch-organization flows.
 """
-from typing import Any, Dict
+from typing import Any, Dict, List
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.permissions import (
     calculate_remaining_credits,
@@ -11,7 +13,33 @@ from app.core.permissions import (
     get_primary_role,
 )
 from app.crud import organization_member_crud, usage_crud
-from app.models import User
+from app.models import Role, User
+from app.models.user import user_roles
+
+
+async def get_active_org_roles(db: AsyncSession, user: User) -> List[Role]:
+    """Return roles assigned in the user's currently active organization.
+
+    Includes roles whose user_roles.organization_id matches user.organization_id
+    OR is NULL (system/global roles like superuser/admin that are not scoped to
+    a specific organization). Users without an active organization fall back to
+    all of their roles.
+    """
+    if user.organization_id is None:
+        return list(user.roles)
+
+    stmt = (
+        select(Role)
+        .join(user_roles, user_roles.c.role_id == Role.id)
+        .where(user_roles.c.user_id == user.id)
+        .where(
+            (user_roles.c.organization_id == user.organization_id)
+            | (user_roles.c.organization_id.is_(None))
+        )
+        .options(selectinload(Role.permissions))
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().unique().all())
 
 
 async def build_user_token_payload(
@@ -20,15 +48,17 @@ async def build_user_token_payload(
 ) -> Dict[str, Any]:
     """Build the JWT access token payload for a user.
 
-    Reads the user's current primary organization, all memberships, roles,
-    permissions, quotas and remaining daily credits, and returns the dict
-    that will be signed into the access token.
+    Reads the user's current primary organization, roles scoped to that
+    organization, their permissions, quotas and remaining daily credits, and
+    returns the dict that will be signed into the access token.
     """
-    roles = [role.name for role in user.roles]
+    active_roles = await get_active_org_roles(db, user)
+
+    roles = [role.name for role in active_roles]
 
     permissions = []
     seen = set()
-    for role in user.roles:
+    for role in active_roles:
         for perm in role.permissions:
             key = (perm.resource, perm.action)
             if key in seen:
@@ -36,8 +66,8 @@ async def build_user_token_payload(
             seen.add(key)
             permissions.append({"resource": perm.resource, "action": perm.action})
 
-    data_access = get_data_access_for_user(user)
-    primary_role = get_primary_role(user)
+    data_access = get_data_access_for_user(user, roles=active_roles)
+    primary_role = get_primary_role(user, roles=active_roles)
 
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
     remaining_credits = calculate_remaining_credits(user, today_usage)
