@@ -4,11 +4,9 @@ Revision ID: h8i9j0k1l2m3
 Revises: g7h8i9j0k1l2
 Create Date: 2026-04-22 18:00:00.000000
 
-Data migration + schema change:
-- Provision a personal organization for every user missing one.
-- Backfill user_roles.organization_id where NULL.
-- Drop guest/demo roles along with their user/role links.
-- Tighten user_roles: organization_id NOT NULL, PK includes organization_id.
+Order of operations matters — the 3-column PK must be in place before we
+insert any (user, role, org) row that shares (user, role) with an existing
+2-column-PK row.
 """
 from typing import Sequence, Union
 
@@ -55,8 +53,7 @@ def upgrade() -> None:
         """
     )
 
-    # 2. Owner membership for every user in their primary organization
-    #    (idempotent — skip when membership already exists).
+    # 2. Owner membership in organization_members for every user (idempotent).
     op.execute(
         """
         INSERT INTO organization_members
@@ -72,24 +69,8 @@ def upgrade() -> None:
         """
     )
 
-    # 3. Ensure every org has an 'owner' role entry in user_roles for its owner.
-    op.execute(
-        """
-        INSERT INTO user_roles (user_id, role_id, organization_id)
-        SELECT o.owner_id, r.id, o.id
-        FROM organizations o
-        JOIN roles r ON r.name = 'owner'
-        WHERE o.owner_id IS NOT NULL
-          AND NOT EXISTS (
-              SELECT 1 FROM user_roles ur
-              WHERE ur.user_id = o.owner_id
-                AND ur.role_id = r.id
-                AND ur.organization_id = o.id
-          );
-        """
-    )
-
-    # 4. Backfill NULL organization_id in existing user_roles rows.
+    # 3. Backfill NULL organization_id in existing user_roles rows. Must run
+    #    before the NOT NULL constraint is added.
     op.execute(
         """
         UPDATE user_roles ur
@@ -101,10 +82,10 @@ def upgrade() -> None:
         """
     )
 
-    # 5. Delete remaining NULL rows (shouldn't exist after step 1, defensive).
+    # 4. Defensive: delete any user_roles rows that still have NULL org_id.
     op.execute("DELETE FROM user_roles WHERE organization_id IS NULL;")
 
-    # 6. Drop guest/demo user_roles, role_permissions, and roles.
+    # 5. Drop guest/demo user_roles, role_permissions, and roles.
     op.execute(
         """
         DELETE FROM user_roles
@@ -119,13 +100,34 @@ def upgrade() -> None:
     )
     op.execute("DELETE FROM roles WHERE name IN ('guest', 'demo');")
 
-    # 7. Tighten schema: NOT NULL + composite PK including organization_id.
+    # 6. Tighten schema: organization_id NOT NULL + replace 2-column PK with
+    #    the 3-column (user_id, role_id, organization_id). This must run
+    #    before any INSERT that could produce a duplicate (user, role) pair
+    #    scoped to different orgs.
     op.alter_column("user_roles", "organization_id", nullable=False)
     op.drop_constraint("user_roles_pkey", "user_roles", type_="primary")
     op.create_primary_key(
         "user_roles_pkey",
         "user_roles",
         ["user_id", "role_id", "organization_id"],
+    )
+
+    # 7. Ensure every org owner has an owner-role entry in user_roles for
+    #    their org. Safe now that PK allows (user, role, different_org).
+    op.execute(
+        """
+        INSERT INTO user_roles (user_id, role_id, organization_id)
+        SELECT o.owner_id, r.id, o.id
+        FROM organizations o
+        JOIN roles r ON r.name = 'owner'
+        WHERE o.owner_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM user_roles ur
+              WHERE ur.user_id = o.owner_id
+                AND ur.role_id = r.id
+                AND ur.organization_id = o.id
+          );
+        """
     )
 
 
