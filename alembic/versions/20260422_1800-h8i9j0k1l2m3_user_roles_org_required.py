@@ -13,7 +13,6 @@ Data migration + schema change:
 from typing import Sequence, Union
 
 from alembic import op
-from sqlalchemy import text
 
 
 revision: str = "h8i9j0k1l2m3"
@@ -23,123 +22,105 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-
     # 1. Personal orgs for users without organization_id.
     #    Name: "{first_name} {last_name}" with empty parts stripped; fallback
     #    to "Kişisel Organizasyon" when both are empty.
-    bind.execute(
-        text(
-            """
-            WITH new_orgs AS (
-                INSERT INTO organizations (id, name, owner_id, is_active, created_at, updated_at)
-                SELECT
-                    gen_random_uuid(),
-                    COALESCE(
-                        NULLIF(
-                            TRIM(BOTH ' ' FROM
-                                COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')
-                            ),
-                            ''
+    op.execute(
+        """
+        WITH new_orgs AS (
+            INSERT INTO organizations (id, name, owner_id, is_active, created_at, updated_at)
+            SELECT
+                gen_random_uuid(),
+                COALESCE(
+                    NULLIF(
+                        TRIM(BOTH ' ' FROM
+                            COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')
                         ),
-                        'Kişisel Organizasyon'
+                        ''
                     ),
-                    u.id,
-                    TRUE,
-                    NOW(),
-                    NOW()
-                FROM users u
-                WHERE u.organization_id IS NULL
-                RETURNING id AS org_id, owner_id
-            )
-            UPDATE users u
-            SET organization_id = no.org_id
-            FROM new_orgs no
-            WHERE u.id = no.owner_id;
-            """
+                    'Kişisel Organizasyon'
+                ),
+                u.id,
+                TRUE,
+                NOW(),
+                NOW()
+            FROM users u
+            WHERE u.organization_id IS NULL
+            RETURNING id AS org_id, owner_id
         )
+        UPDATE users u
+        SET organization_id = no.org_id
+        FROM new_orgs no
+        WHERE u.id = no.owner_id;
+        """
     )
 
     # 2. Owner membership for every user in their primary organization
     #    (idempotent — skip when membership already exists).
-    bind.execute(
-        text(
-            """
-            INSERT INTO organization_members
-                (id, user_id, organization_id, role, is_primary, joined_at, created_at, updated_at)
-            SELECT
-                gen_random_uuid(), u.id, u.organization_id, 'owner', TRUE, NOW(), NOW(), NOW()
-            FROM users u
-            WHERE u.organization_id IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1 FROM organization_members om
-                  WHERE om.user_id = u.id AND om.organization_id = u.organization_id
-              );
-            """
-        )
+    op.execute(
+        """
+        INSERT INTO organization_members
+            (id, user_id, organization_id, role, is_primary, joined_at, created_at, updated_at)
+        SELECT
+            gen_random_uuid(), u.id, u.organization_id, 'owner', TRUE, NOW(), NOW(), NOW()
+        FROM users u
+        WHERE u.organization_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM organization_members om
+              WHERE om.user_id = u.id AND om.organization_id = u.organization_id
+          );
+        """
     )
 
-    # 3. Ensure every org has at least an 'owner' role entry in user_roles for
-    #    its owner. This creates the (owner_user, owner_role, org) baseline.
-    bind.execute(
-        text(
-            """
-            INSERT INTO user_roles (user_id, role_id, organization_id)
-            SELECT o.owner_id, r.id, o.id
-            FROM organizations o
-            JOIN roles r ON r.name = 'owner'
-            WHERE o.owner_id IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1 FROM user_roles ur
-                  WHERE ur.user_id = o.owner_id
-                    AND ur.role_id = r.id
-                    AND ur.organization_id = o.id
-              );
-            """
-        )
+    # 3. Ensure every org has an 'owner' role entry in user_roles for its owner.
+    op.execute(
+        """
+        INSERT INTO user_roles (user_id, role_id, organization_id)
+        SELECT o.owner_id, r.id, o.id
+        FROM organizations o
+        JOIN roles r ON r.name = 'owner'
+        WHERE o.owner_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM user_roles ur
+              WHERE ur.user_id = o.owner_id
+                AND ur.role_id = r.id
+                AND ur.organization_id = o.id
+          );
+        """
     )
 
     # 4. Backfill NULL organization_id in existing user_roles rows.
-    bind.execute(
-        text(
-            """
-            UPDATE user_roles ur
-            SET organization_id = u.organization_id
-            FROM users u
-            WHERE ur.user_id = u.id
-              AND ur.organization_id IS NULL
-              AND u.organization_id IS NOT NULL;
-            """
-        )
+    op.execute(
+        """
+        UPDATE user_roles ur
+        SET organization_id = u.organization_id
+        FROM users u
+        WHERE ur.user_id = u.id
+          AND ur.organization_id IS NULL
+          AND u.organization_id IS NOT NULL;
+        """
     )
 
-    # 5. Delete remaining NULL rows (users with no org — shouldn't exist after
-    #    step 1, but defensive).
-    bind.execute(text("DELETE FROM user_roles WHERE organization_id IS NULL;"))
+    # 5. Delete remaining NULL rows (shouldn't exist after step 1, defensive).
+    op.execute("DELETE FROM user_roles WHERE organization_id IS NULL;")
 
     # 6. Drop guest/demo user_roles, role_permissions, and roles.
-    bind.execute(
-        text(
-            """
-            DELETE FROM user_roles
-            WHERE role_id IN (SELECT id FROM roles WHERE name IN ('guest', 'demo'));
-            """
-        )
+    op.execute(
+        """
+        DELETE FROM user_roles
+        WHERE role_id IN (SELECT id FROM roles WHERE name IN ('guest', 'demo'));
+        """
     )
-    bind.execute(
-        text(
-            """
-            DELETE FROM role_permissions
-            WHERE role_id IN (SELECT id FROM roles WHERE name IN ('guest', 'demo'));
-            """
-        )
+    op.execute(
+        """
+        DELETE FROM role_permissions
+        WHERE role_id IN (SELECT id FROM roles WHERE name IN ('guest', 'demo'));
+        """
     )
-    bind.execute(text("DELETE FROM roles WHERE name IN ('guest', 'demo');"))
+    op.execute("DELETE FROM roles WHERE name IN ('guest', 'demo');")
 
     # 7. Tighten schema: NOT NULL + composite PK including organization_id.
     op.alter_column("user_roles", "organization_id", nullable=False)
-
-    # Drop the old 2-column PK and create the 3-column PK.
     op.drop_constraint("user_roles_pkey", "user_roles", type_="primary")
     op.create_primary_key(
         "user_roles_pkey",
