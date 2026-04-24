@@ -127,7 +127,8 @@ class CRUDOrganizationMember:
         *,
         user_id: UUID,
         organization_id: UUID,
-        new_role: str
+        new_role: str,
+        commit: bool = True,
     ) -> Optional[OrganizationMember]:
         """
         Update user's role in organization.
@@ -137,6 +138,8 @@ class CRUDOrganizationMember:
             user_id: User ID
             organization_id: Organization ID
             new_role: New role to assign
+            commit: When False the caller owns the transaction boundary (used
+                by endpoints that atomically update user_roles alongside).
 
         Returns:
             Updated membership or None
@@ -148,8 +151,9 @@ class CRUDOrganizationMember:
         if membership:
             membership.role = new_role
             db.add(membership)
-            await db.commit()
-            await db.refresh(membership)
+            if commit:
+                await db.commit()
+                await db.refresh(membership)
 
         return membership
 

@@ -54,6 +54,7 @@ class RoleResponse(RoleBase):
     default_monthly_query_limit: Optional[int] = None
     default_daily_document_limit: Optional[int] = None
     default_max_document_size_mb: int
+    ui_roles: bool = False
 
     class Config:
         from_attributes = True

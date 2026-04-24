@@ -1,7 +1,7 @@
 """
 CRUD operations for Role model.
 """
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -15,6 +15,12 @@ from app.schemas import RoleCreate, RoleUpdate
 
 class CRUDRole(CRUDBase[Role, RoleCreate, RoleUpdate]):
     """CRUD operations for Role model."""
+
+    async def get_ui_visible(self, db: AsyncSession) -> List[Role]:
+        """Return roles marked for user-facing selection dropdowns."""
+        stmt = select(Role).where(Role.ui_roles == True).order_by(Role.name)
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
 
     async def get_by_name(
         self,

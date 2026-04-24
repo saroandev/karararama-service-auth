@@ -4,7 +4,7 @@ Role model for role-based access control (RBAC).
 from datetime import datetime
 from typing import List
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -46,6 +46,11 @@ class Role(Base, UUIDMixin):
     default_monthly_query_limit = Column(Integer, nullable=True)
     default_daily_document_limit = Column(Integer, nullable=True)
     default_max_document_size_mb = Column(Integer, default=10, nullable=False)
+
+    # UI visibility flag — true when role is shown in user-facing dropdowns
+    # (invite, change-member-role). System roles (admin, superuser, user,
+    # premium) stay false.
+    ui_roles = Column(Boolean, default=False, nullable=False)
 
     # Relationships
     permissions = relationship(

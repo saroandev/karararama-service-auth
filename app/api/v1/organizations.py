@@ -5,13 +5,15 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.crud import organization_crud, user_crud, role_crud, invitation_crud, muvekkil_crud
-from app.models import User, Organization, Invitation, InvitationStatus
+from app.crud import organization_crud, user_crud, role_crud, invitation_crud, muvekkil_crud, organization_member_crud
+from app.models import OrganizationMember, User, Organization, Invitation, InvitationStatus
+from app.models.user import user_roles as user_roles_table
 from app.schemas import (
     OrganizationCreate,
     OrganizationUpdate,
@@ -27,8 +29,14 @@ from app.schemas import (
 )
 from app.api.deps import get_current_active_user, require_permission, require_role
 from app.core.security import JWTPayload
+from app.services.email import ROLE_DISPLAY_NAMES
 
 router = APIRouter()
+
+
+class ChangeMemberRoleRequest(BaseModel):
+    """Payload for PATCH /organizations/me/members/{email}/role."""
+    role: str
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
@@ -431,6 +439,108 @@ async def invite_users_to_organization(
         )
 
     return created_invitations
+
+
+@router.patch("/me/members/{email}/role", response_model=OrganizationMemberResponse)
+async def change_member_role(
+    email: str,
+    body: ChangeMemberRoleRequest,
+    db: AsyncSession = Depends(get_db),
+    _: JWTPayload = Depends(require_permission("organization", "change-member-role")),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Change a member's role inside the caller's active organization.
+
+    Scope: operates on current_user.organization_id. Target is identified by
+    email. Only roles marked ui_roles=true can be assigned; owner role is
+    protected both as source and as target.
+    """
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aktif bir organizasyonunuz yok",
+        )
+
+    target = await user_crud.get_by_email(db, email=email)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı",
+        )
+
+    if target.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kendi rolünüzü değiştiremezsiniz",
+        )
+
+    membership = await organization_member_crud.get_membership(
+        db, user_id=target.id, organization_id=current_user.organization_id
+    )
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bu kullanıcı organizasyonunuzda değil",
+        )
+
+    if membership.role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organizasyon sahibinin rolü değiştirilemez",
+        )
+
+    new_role_name = body.role
+    if new_role_name.lower() == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Owner rolü atanamaz",
+        )
+
+    new_role = await role_crud.get_by_name(db, name=new_role_name)
+    if not new_role or not new_role.ui_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Geçersiz rol",
+        )
+
+    # Replace any existing role assignments for target in this org with the
+    # new single role. All updates share one commit at the end.
+    await db.execute(
+        user_roles_table.delete().where(
+            user_roles_table.c.user_id == target.id,
+            user_roles_table.c.organization_id == current_user.organization_id,
+        )
+    )
+    await user_crud.add_role(
+        db,
+        user=target,
+        role=new_role,
+        organization_id=current_user.organization_id,
+    )
+    await organization_member_crud.update_role(
+        db,
+        user_id=target.id,
+        organization_id=current_user.organization_id,
+        new_role=new_role_name,
+        commit=False,
+    )
+    await db.commit()
+    await db.refresh(membership)
+
+    organization = await organization_crud.get(db, id=current_user.organization_id)
+
+    return OrganizationMemberResponse(
+        id=target.id,
+        first_name=target.first_name,
+        last_name=target.last_name,
+        email=target.email,
+        role=membership.role,
+        role_display_name=ROLE_DISPLAY_NAMES.get(membership.role, membership.role.title()),
+        is_owner=str(target.id) == str(organization.owner_id),
+        is_verified=target.is_verified,
+        joined_at=membership.joined_at,
+    )
 
 
 @router.delete("/me/members/{user_id}")
