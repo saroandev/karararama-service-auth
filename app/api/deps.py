@@ -1,6 +1,7 @@
 """
 FastAPI dependencies for authentication and authorization.
 """
+import logging
 from typing import List, Optional
 from uuid import UUID
 
@@ -10,63 +11,71 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import jwt_handler
+from app.core.security import JWTPayload, jwt_handler
 from app.crud import user_crud, blacklisted_token_crud
 from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
+
+logger = logging.getLogger(__name__)
 
 # HTTP Bearer token scheme
 security = HTTPBearer()
 
 
-async def get_current_user(
+async def get_jwt_payload(
     db: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> User:
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> JWTPayload:
     """
-    Get current user from JWT token.
+    Decode and validate the JWT access token, check blacklist, return a typed
+    JWTPayload. Does not touch the users table — stateless authorization.
 
-    Args:
-        db: Database session
-        credentials: HTTP Bearer credentials
-
-    Returns:
-        Current user instance
-
-    Raises:
-        HTTPException: If token is invalid, blacklisted, or user not found
+    Used as a sub-dependency by `get_current_user` and `require_permission`;
+    FastAPI deduplicates so a single request decodes the token only once.
     """
     token = credentials.credentials
 
-    # Check if token is blacklisted
     is_blacklisted = await blacklisted_token_crud.is_blacklisted(db, token)
     if is_blacklisted:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token iptal edildi. Lütfen tekrar giriş yapın."
+            detail="Token iptal edildi. Lütfen tekrar giriş yapın.",
         )
 
     try:
-        payload = jwt_handler.decode_token(token)
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Kimlik doğrulama başarısız"
-            )
+        raw_payload = jwt_handler.decode_token(token)
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Kimlik doğrulama başarısız"
+            detail="Kimlik doğrulama başarısız",
         )
 
-    user = await user_crud.get_with_roles(db, id=UUID(user_id))
+    payload = JWTPayload(raw_payload)
+    if payload.sub is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Kimlik doğrulama başarısız",
+        )
+    return payload
+
+
+async def get_current_user(
+    db: AsyncSession = Depends(get_db),
+    payload: JWTPayload = Depends(get_jwt_payload),
+) -> User:
+    """
+    Get current user (ORM) from the JWT payload.
+
+    Use this only when you actually need the full User object with its
+    relationships (roles, memberships, etc). For simple permission gates
+    use `require_permission(...)` instead — it avoids the DB round trip.
+    """
+    user = await user_crud.get_with_roles(db, id=UUID(payload.sub))
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Kullanıcı bulunamadı"
+            detail="Kullanıcı bulunamadı",
         )
-
     return user
 
 
@@ -135,65 +144,40 @@ def require_role(required_roles: List[str]):
 
 def require_permission(resource: str, action: str):
     """
-    Dependency to check if user has required permission.
+    Stateless permission gate backed by the JWT `permissions` array.
 
-    Args:
-        resource: Resource name (e.g., 'research', 'documents')
-        action: Action name (e.g., 'query', 'upload')
+    The JWT is already scoped to the user's active organization by the token
+    builder, so checking it here gives correct org-scoped authorization
+    without any DB round trip. Wildcards (`resource:*`, `*:action`, `*:*`)
+    are honoured.
 
-    Returns:
-        Dependency function
+    Returns the JWTPayload so the endpoint can use claims directly:
 
-    Usage:
-        @app.post("/research/query")
-        async def query(user: User = Depends(require_permission("research", "query"))):
-            ...
+        @router.post("/tebligatlar/batch")
+        async def batch(
+            current_user: JWTPayload = Depends(require_permission("tebligat", "senkronize")),
+        ):
+            current_user.email, current_user.organization_id, ...
+
+    Endpoints that also need the User ORM object can layer
+    `Depends(get_current_active_user)` separately — FastAPI deduplicates the
+    underlying JWT decode so it still happens once per request.
     """
+
     async def permission_checker(
-        current_user: User = Depends(get_current_active_user)
-    ) -> User:
-        user_roles = [role.name for role in current_user.roles]
-
-        # Superuser has all permissions
-        if "superuser" in user_roles:
-            return current_user
-
-        # Admin has all permissions
-        if "admin" in user_roles:
-            return current_user
-
-        # Check if user has the required permission through their roles
-        for role in current_user.roles:
-            for permission in role.permissions:
-                # Check for exact match
-                if permission.resource == resource and permission.action == action:
-                    return current_user
-
-                # Check for wildcard permissions
-                # *:* = full access to everything
-                if permission.resource == "*" and permission.action == "*":
-                    return current_user
-
-                # resource:* = full access to specific resource
-                if permission.resource == resource and permission.action == "*":
-                    return current_user
-
-                # *:action = specific action on all resources
-                if permission.resource == "*" and permission.action == action:
-                    return current_user
-
-        # Collect user's permissions for error message
-        user_permissions = []
-        for role in current_user.roles:
-            for perm in role.permissions:
-                user_permissions.append({
-                    'resource': perm.resource,
-                    'action': perm.action
-                })
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"İzin reddedildi: {resource}:{action}. Mevcut izinler: {user_permissions}"
-        )
+        payload: JWTPayload = Depends(get_jwt_payload),
+    ) -> JWTPayload:
+        if not payload.has_permission(resource, action):
+            logger.warning(
+                "Permission denied: user=%s resource=%s action=%s",
+                payload.email,
+                resource,
+                action,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Bu işlem için '{resource}:{action}' yetkisi gereklidir",
+            )
+        return payload
 
     return permission_checker

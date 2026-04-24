@@ -146,6 +146,44 @@ class JWTHandler:
         return payload
 
 
+class JWTPayload:
+    """Typed wrapper around a decoded JWT access token payload.
+
+    Exposes the common claims as attributes and provides permission checks
+    backed by the `permissions` array in the token — stateless, no DB round
+    trip. Permissions are already scoped to the user's active organization
+    by the token builder (see app.services.token_service).
+    """
+
+    def __init__(self, payload: Dict[str, Any]):
+        self.raw: Dict[str, Any] = payload
+        self.sub: Optional[str] = payload.get("sub")
+        self.email: Optional[str] = payload.get("email")
+        self.organization_id: Optional[str] = payload.get("organization_id")
+        self.role: Optional[str] = payload.get("role")
+        self.roles: list = payload.get("roles", [])
+        self.permissions: list = payload.get("permissions", [])
+        self.data_access: Dict[str, Any] = payload.get("data_access", {})
+        self.organizations: list = payload.get("organizations", [])
+        self.plan: Optional[str] = payload.get("plan")
+
+    def has_permission(self, resource: str, action: str) -> bool:
+        """Check if the token grants (resource, action), supporting wildcards.
+
+        Matches:
+            exact:         {"resource": "tebligat", "action": "senkronize"}
+            resource-all:  {"resource": "tebligat", "action": "*"}
+            action-all:    {"resource": "*",       "action": "senkronize"}
+            full:          {"resource": "*",       "action": "*"}
+        """
+        for perm in self.permissions:
+            r = perm.get("resource", "")
+            a = perm.get("action", "")
+            if (r == resource or r == "*") and (a == action or a == "*"):
+                return True
+        return False
+
+
 class ActivityWatchTokenHandler:
     """Handle Activity Watch token generation and encryption."""
 

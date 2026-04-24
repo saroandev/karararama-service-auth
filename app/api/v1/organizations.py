@@ -25,7 +25,8 @@ from app.schemas import (
     InvitationResponse,
     MuvekkillResponse,
 )
-from app.api.deps import get_current_active_user, require_role
+from app.api.deps import get_current_active_user, require_permission, require_role
+from app.core.security import JWTPayload
 
 router = APIRouter()
 
@@ -325,24 +326,13 @@ async def get_my_organization_members(
 async def invite_users_to_organization(
     invite_in: InvitationBatchCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    _: JWTPayload = Depends(require_permission("organization", "invite")),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Invite users to current user's organization.
 
-    Only organization owner or admin can invite users.
-    Maximum 10 emails per batch.
-
-    Args:
-        invite_in: Batch invitation data (emails list, role)
-        db: Database session
-        current_user: Current authenticated user
-
-    Returns:
-        List of created invitations
-
-    Raises:
-        HTTPException: If user doesn't have organization, not authorized, or email already invited
+    Requires the `organization:invite` permission. Maximum 10 emails per batch.
     """
     # Check if user has an organization
     if not current_user.organization_id:
@@ -351,18 +341,7 @@ async def invite_users_to_organization(
             detail="Kullanıcının organizasyonu yok"
         )
 
-    # Check if user is owner or admin
-    user_roles = [role.name.lower() for role in current_user.roles]
     organization = await organization_crud.get(db, id=current_user.organization_id)
-
-    is_owner = str(organization.owner_id) == str(current_user.id)
-    is_admin = "admin" in user_roles
-
-    if not (is_owner or is_admin):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sadece organizasyon sahibi veya admin kullanıcı davet edebilir"
-        )
 
     # Validate role (cannot invite as owner)
     if invite_in.role.lower() == "owner":
