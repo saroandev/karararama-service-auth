@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import jwt_handler
-from app.core.permissions import get_data_access_for_user, get_primary_role, calculate_remaining_credits
+from app.core.permissions import get_data_access_for_user, calculate_remaining_credits
 from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud, password_reset, organization_member_crud
 from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
@@ -351,8 +351,8 @@ async def verify_token(
     # Get data access permissions
     data_access = get_data_access_for_user(current_user, roles=active_roles)
 
-    # Get primary role
-    primary_role = get_primary_role(current_user, roles=active_roles)
+    # Aktif organizasyondaki gerçek rol adı (token_service ile hizalı)
+    primary_role = active_roles[0].name if active_roles else "member"
 
     # Calculate remaining credits
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=current_user.id)

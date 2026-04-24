@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload
 from app.core.permissions import (
     calculate_remaining_credits,
     get_data_access_for_user,
-    get_primary_role,
 )
 from app.crud import organization_member_crud, usage_crud
 from app.models import Role, User
@@ -64,7 +63,8 @@ async def build_user_token_payload(
             permissions.append({"resource": perm.resource, "action": perm.action})
 
     data_access = get_data_access_for_user(user, roles=active_roles)
-    primary_role = get_primary_role(user, roles=active_roles)
+    # JWT 'role' = aktif organizasyondaki gerçek rol adı.
+    primary_role = active_roles[0].name if active_roles else "member"
 
     today_usage = await usage_crud.get_user_daily_usage(db, user_id=user.id)
     remaining_credits = calculate_remaining_credits(user, today_usage)
