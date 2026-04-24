@@ -33,13 +33,11 @@ fi
 echo "Running alembic upgrade head..."
 alembic upgrade head 2>&1 || { echo "MIGRATION FAILED"; exit 1; }
 
-echo "Migrations completed - seeding database"
+echo "Migrations completed - starting application"
 
-# Set PYTHONPATH and run database seeding
-export PYTHONPATH=/app:$PYTHONPATH
-python -m app.db_seed
-
-echo "Database seeding completed - starting application"
+# Seed is intentionally NOT run on every pod start — roles/permissions are
+# managed manually (SQL or admin endpoints). Run `bash seed.sh` by hand when
+# bootstrapping a fresh environment.
 
 # Ensure appuser owns everything after root-run migrations/seed
 chown -R appuser:appuser /app
