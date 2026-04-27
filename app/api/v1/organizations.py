@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -594,8 +594,13 @@ async def remove_member_from_organization(
             detail="Organizasyon sahibi çıkarılamaz",
         )
 
-    target = await user_crud.get(db, id=user_id)
-    if not target:
+    # Pull just the email up front via a lightweight scalar query so we
+    # don't load the User ORM instance (which would eager-load memberships
+    # via selectin and trip cascade rules once we delete the membership).
+    target_email = (
+        await db.execute(select(User.email).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if target_email is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Kullanıcı bulunamadı",
@@ -617,44 +622,63 @@ async def remove_member_from_organization(
         commit=False,
     )
     # autoflush is disabled on the session — flush so the pending DELETE is
-    # actually sent to the DB before the next SELECT, otherwise the deleted
-    # membership comes back via identity map and the subsequent db.add(m)
-    # re-attaches it, silently undoing the delete.
+    # actually sent to the DB before the SELECT below, otherwise the deleted
+    # membership can come back via identity map.
     await db.flush()
 
     # 3) Re-point users.organization_id: the user's primary org becomes the
-    # one they own (if any); otherwise NULL. Mirror is_primary on memberships.
-    remaining_stmt = select(OrganizationMember).where(
+    # one they own (if any); otherwise NULL. Use core UPDATE statements so
+    # we don't reattach ORM instances and trigger the User->memberships
+    # delete-orphan cascade on the just-deleted membership.
+    remaining_stmt = select(
+        OrganizationMember.id,
+        OrganizationMember.organization_id,
+        OrganizationMember.role,
+    ).where(
         OrganizationMember.user_id == user_id,
         OrganizationMember.organization_id != organization_id,
     )
-    remaining = (await db.execute(remaining_stmt)).scalars().all()
+    remaining = (await db.execute(remaining_stmt)).all()
 
-    new_primary = next((m for m in remaining if m.role == "owner"), None)
-    for m in remaining:
-        m.is_primary = (new_primary is not None and m.id == new_primary.id)
-        db.add(m)
+    new_primary = next((row for row in remaining if row.role == "owner"), None)
+    new_primary_org_id = new_primary.organization_id if new_primary else None
 
-    target.organization_id = new_primary.organization_id if new_primary else None
-    db.add(target)
+    # Clear is_primary for all remaining memberships, then set the chosen one.
+    if remaining:
+        await db.execute(
+            update(OrganizationMember)
+            .where(OrganizationMember.user_id == user_id)
+            .values(is_primary=False)
+        )
+    if new_primary is not None:
+        await db.execute(
+            update(OrganizationMember)
+            .where(OrganizationMember.id == new_primary.id)
+            .values(is_primary=True)
+        )
+
+    await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(organization_id=new_primary_org_id)
+    )
 
     # 4) Revoke refresh tokens so the next access-token expiry forces logout.
-    refresh_stmt = select(RefreshToken).where(
-        RefreshToken.user_id == user_id,
-        RefreshToken.revoked_at.is_(None),
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.utcnow())
     )
-    refresh_tokens = (await db.execute(refresh_stmt)).scalars().all()
-    now = datetime.utcnow()
-    for tok in refresh_tokens:
-        tok.revoked_at = now
-        db.add(tok)
 
     await db.commit()
 
     return {
         "message": "Kullanıcı organizasyondan çıkarıldı",
         "user_id": str(user_id),
-        "email": target.email,
+        "email": target_email,
     }
 
 
