@@ -616,11 +616,17 @@ async def remove_member_from_organization(
         organization_id=organization_id,
         commit=False,
     )
+    # autoflush is disabled on the session — flush so the pending DELETE is
+    # actually sent to the DB before the next SELECT, otherwise the deleted
+    # membership comes back via identity map and the subsequent db.add(m)
+    # re-attaches it, silently undoing the delete.
+    await db.flush()
 
     # 3) Re-point users.organization_id: the user's primary org becomes the
     # one they own (if any); otherwise NULL. Mirror is_primary on memberships.
     remaining_stmt = select(OrganizationMember).where(
-        OrganizationMember.user_id == user_id
+        OrganizationMember.user_id == user_id,
+        OrganizationMember.organization_id != organization_id,
     )
     remaining = (await db.execute(remaining_stmt)).scalars().all()
 
