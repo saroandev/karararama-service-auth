@@ -222,12 +222,15 @@ async def get_organization_members(
             joined_at=membership.joined_at  # Use membership join date, not user creation date
         ))
 
-    # Get pending invitations
+    # Get pending invitations (only those still within their validity window;
+    # status flips to EXPIRED lazily — expired-but-still-PENDING rows are
+    # filtered out here so the UI never sees them).
     stmt = (
         select(Invitation)
         .where(
             Invitation.organization_id == current_user.organization_id,
-            Invitation.status == InvitationStatus.PENDING
+            Invitation.status == InvitationStatus.PENDING,
+            Invitation.expires_at > datetime.utcnow(),
         )
     )
     result = await db.execute(stmt)
@@ -440,6 +443,54 @@ async def invite_users_to_organization(
         )
 
     return created_invitations
+
+
+@router.post("/me/invitations/{invitation_id}/revoke", status_code=status.HTTP_200_OK)
+async def revoke_invitation(
+    invitation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: JWTPayload = Depends(require_permission("organization", "invite")),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Revoke a pending invitation in the caller's active organization.
+
+    Scope: invitation must belong to current_user.organization_id and still be
+    PENDING. Already-accepted, already-revoked, or expired invitations are
+    rejected.
+    """
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aktif bir organizasyonunuz yok",
+        )
+
+    invitation = await invitation_crud.get(db, id=invitation_id)
+    if not invitation or invitation.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Davet bulunamadı",
+        )
+
+    if invitation.status != InvitationStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sadece bekleyen davetler geri alınabilir",
+        )
+
+    if invitation.is_expired:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Davet zaten süresi dolmuş",
+        )
+
+    await invitation_crud.mark_revoked(db, invitation=invitation)
+
+    return {
+        "message": "Davet geri alındı",
+        "invitation_id": str(invitation.id),
+        "email": invitation.email,
+    }
 
 
 @router.patch("/me/members/{email}/role", response_model=OrganizationMemberResponse)
