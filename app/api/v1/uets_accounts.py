@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_active_user, get_jwt_payload
+from app.api.deps import get_current_active_user, get_jwt_payload, require_permission
 from app.core.security import JWTPayload
 from app.crud.uets_account import uets_account_crud
 from app.models import User
@@ -32,7 +32,8 @@ router = APIRouter()
 async def connect_uets_account(
     account_data: UetsAccountCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    _: JWTPayload = Depends(require_permission("uets-account", "connect")),
+    current_user: User = Depends(get_current_active_user),
 ) -> UetsAccountResponse:
     """
     Connect a new UETS account.
@@ -130,7 +131,8 @@ class DeleteResponse(BaseModel):
 async def disconnect_uets_account(
     uets_account_name: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    _: JWTPayload = Depends(require_permission("uets-account", "disconnect")),
+    current_user: User = Depends(get_current_active_user),
 ) -> DeleteResponse:
     """
     Disconnect a UETS account.
