@@ -1,12 +1,15 @@
 """
 UETS account management endpoints.
 """
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, get_jwt_payload
+from app.core.security import JWTPayload
 from app.crud.uets_account import uets_account_crud
 from app.models import User
 from app.schemas.uets_account import (
@@ -81,22 +84,17 @@ async def connect_uets_account(
 )
 async def list_connected_accounts(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    payload: JWTPayload = Depends(get_jwt_payload),
 ) -> UetsAccountListResponse:
     """
-    List all connected UETS accounts for the current user.
+    List all UETS accounts connected to the caller's *active* organization.
 
-    Args:
-        db: Database session
-        current_user: Current authenticated user
-
-    Returns:
-        List of connected UETS accounts
-
-    Raises:
-        HTTPException 403: User has no organization
+    Active org is taken from the JWT's `organization_id` claim, not from
+    users.organization_id (which always points at the user's owned/primary
+    org). This way the list reflects whichever organization the caller has
+    switched to in the UI.
     """
-    if current_user.organization_id is None:
+    if not payload.organization_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Kullanıcının bir organizasyona atanması gerekiyor"
@@ -104,7 +102,7 @@ async def list_connected_accounts(
 
     accounts = await uets_account_crud.get_by_org(
         db,
-        org_id=current_user.organization_id
+        org_id=UUID(payload.organization_id)
     )
 
     return UetsAccountListResponse(
