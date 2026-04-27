@@ -233,7 +233,8 @@ class CRUDOrganizationMember:
         db: AsyncSession,
         *,
         user_id: UUID,
-        organization_id: UUID
+        organization_id: UUID,
+        commit: bool = True,
     ) -> bool:
         """
         Remove user from organization.
@@ -242,6 +243,9 @@ class CRUDOrganizationMember:
             db: Database session
             user_id: User ID
             organization_id: Organization ID
+            commit: When False the caller owns the transaction boundary (used
+                by endpoints that atomically update user_roles / users.organization_id
+                alongside).
 
         Returns:
             True if removed, False if not found
@@ -252,7 +256,8 @@ class CRUDOrganizationMember:
 
         if membership:
             await db.delete(membership)
-            await db.commit()
+            if commit:
+                await db.commit()
             return True
 
         return False

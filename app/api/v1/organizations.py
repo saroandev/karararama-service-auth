@@ -1,6 +1,7 @@
 """
 Organization management endpoints.
 """
+from datetime import datetime
 from typing import List
 from uuid import UUID
 
@@ -12,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.crud import organization_crud, user_crud, role_crud, invitation_crud, muvekkil_crud, organization_member_crud
-from app.models import OrganizationMember, User, Organization, Invitation, InvitationStatus
+from app.models import OrganizationMember, User, Organization, Invitation, InvitationStatus, RefreshToken
 from app.models.user import user_roles as user_roles_table
 from app.schemas import (
     OrganizationCreate,
@@ -547,92 +548,107 @@ async def change_member_role(
 async def remove_member_from_organization(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    _: JWTPayload = Depends(require_permission("organization", "remove-member")),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
-    Remove a member from current user's organization.
+    Remove a member from current user's active organization.
 
-    Only organization owner can remove members.
-    Owner cannot remove themselves.
+    Authorization is gated by the `organization:remove-member` permission
+    (held by owner and org-admin). Invariants enforced regardless of permission:
+      - Owner cannot be removed.
+      - Caller cannot remove themselves (use leave-organization for that).
 
-    Args:
-        user_id: ID of the user to remove
-        db: Database session
-        current_user: Current authenticated user
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException: If not authorized, user not found, or trying to remove owner
+    The removal is atomic and cleans up:
+      - user_roles entries scoped to this organization
+      - the organization_members row
+      - users.organization_id (re-pointed to an org the user owns, or NULL)
+      - all refresh tokens for the removed user (forces re-login)
     """
-    # Check if user has an organization
     if not current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Kullanıcının organizasyonu yok"
+            detail="Kullanıcının organizasyonu yok",
         )
 
-    # Get organization
-    organization = await organization_crud.get(db, id=current_user.organization_id)
-    if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organizasyon bulunamadı"
-        )
+    organization_id = current_user.organization_id
 
-    # Check if current user is the owner
-    is_owner = str(organization.owner_id) == str(current_user.id)
-
-    if not is_owner:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sadece organizasyon sahibi üye çıkarabilir"
-        )
-
-    # Check if trying to remove themselves
     if str(user_id) == str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Kendinizi organizasyondan çıkaramazsınız"
+            detail="Kendinizi organizasyondan çıkaramazsınız",
         )
 
-    # Get the membership
-    from app.crud import organization_member_crud
-
     membership = await organization_member_crud.get_membership(
-        db,
-        user_id=user_id,
-        organization_id=current_user.organization_id
+        db, user_id=user_id, organization_id=organization_id
     )
-
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Kullanıcı bu organizasyonda bulunamadı"
+            detail="Kullanıcı bu organizasyonda bulunamadı",
         )
 
-    # Cannot remove the owner
     if membership.role == "owner":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organizasyon sahibi çıkarılamaz"
+            detail="Organizasyon sahibi çıkarılamaz",
         )
 
-    # Remove the membership
+    target = await user_crud.get(db, id=user_id)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcı bulunamadı",
+        )
+
+    # 1) Drop role assignments scoped to this organization.
+    await db.execute(
+        user_roles_table.delete().where(
+            user_roles_table.c.user_id == user_id,
+            user_roles_table.c.organization_id == organization_id,
+        )
+    )
+
+    # 2) Drop the membership row (no commit — caller owns the transaction).
     await organization_member_crud.remove_member(
         db,
         user_id=user_id,
-        organization_id=current_user.organization_id
+        organization_id=organization_id,
+        commit=False,
     )
 
-    # Get user info for response
-    removed_user = await user_crud.get(db, id=user_id)
+    # 3) Re-point users.organization_id: the user's primary org becomes the
+    # one they own (if any); otherwise NULL. Mirror is_primary on memberships.
+    remaining_stmt = select(OrganizationMember).where(
+        OrganizationMember.user_id == user_id
+    )
+    remaining = (await db.execute(remaining_stmt)).scalars().all()
+
+    new_primary = next((m for m in remaining if m.role == "owner"), None)
+    for m in remaining:
+        m.is_primary = (new_primary is not None and m.id == new_primary.id)
+        db.add(m)
+
+    target.organization_id = new_primary.organization_id if new_primary else None
+    db.add(target)
+
+    # 4) Revoke refresh tokens so the next access-token expiry forces logout.
+    refresh_stmt = select(RefreshToken).where(
+        RefreshToken.user_id == user_id,
+        RefreshToken.revoked_at.is_(None),
+    )
+    refresh_tokens = (await db.execute(refresh_stmt)).scalars().all()
+    now = datetime.utcnow()
+    for tok in refresh_tokens:
+        tok.revoked_at = now
+        db.add(tok)
+
+    await db.commit()
 
     return {
         "message": "Kullanıcı organizasyondan çıkarıldı",
         "user_id": str(user_id),
-        "email": removed_user.email if removed_user else None
+        "email": target.email,
     }
 
 
