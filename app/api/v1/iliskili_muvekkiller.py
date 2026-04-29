@@ -17,7 +17,7 @@ from app.schemas.iliskili_muvekkil import (
     IliskiliMuvekkillResponse,
     IliskiliMuvekkillAssign,
 )
-from app.api.deps import require_role
+from app.api.deps import get_current_active_user, require_role
 
 router = APIRouter()
 
@@ -105,7 +105,7 @@ async def list_iliskili_muvekkiller(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """List unassigned iliskili muvekkiller for the caller's organization."""
     user_roles = [role.name.lower() for role in current_user.roles]
