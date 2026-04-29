@@ -83,6 +83,19 @@ async def create_iliskili_muvekkil(
                 detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı",
             )
 
+    name_exists = await iliskili_muvekkil_crud.name_exists_in_org(
+        db,
+        unvan=data_in.unvan,
+        first_name=data_in.first_name,
+        last_name=data_in.last_name,
+        organization_id=target_org_id,
+    )
+    if name_exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu unvan ve ad-soyad ile bir ilişkili müvekkil zaten kayıtlı",
+        )
+
     created = await iliskili_muvekkil_crud.create(db, obj_in=data_in, organization_id=target_org_id)
     return created
 
@@ -144,6 +157,29 @@ async def update_iliskili_muvekkil(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı",
+            )
+
+    new_unvan = data_in.unvan if data_in.unvan is not None else record.unvan
+    new_first = data_in.first_name if data_in.first_name is not None else record.first_name
+    new_last = data_in.last_name if data_in.last_name is not None else record.last_name
+    name_changed = (
+        new_unvan != record.unvan
+        or new_first.lower() != record.first_name.lower()
+        or new_last.lower() != record.last_name.lower()
+    )
+    if name_changed:
+        name_exists = await iliskili_muvekkil_crud.name_exists_in_org(
+            db,
+            unvan=new_unvan,
+            first_name=new_first,
+            last_name=new_last,
+            organization_id=record.organization_id,
+            exclude_id=record.id,
+        )
+        if name_exists:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bu unvan ve ad-soyad ile bir ilişkili müvekkil zaten kayıtlı",
             )
 
     updated = await iliskili_muvekkil_crud.update(db, db_obj=record, obj_in=data_in)

@@ -4,11 +4,12 @@ CRUD operations for IliskiliMuvekkil (Related Client).
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CRUDBase
 from app.models.iliskili_muvekkil import IliskiliMuvekkil
+from app.models.muvekkil import MuvekkilUnvan
 from app.models.organization import Organization
 from app.schemas.iliskili_muvekkil import IliskiliMuvekkillCreate, IliskiliMuvekkillUpdate
 
@@ -89,6 +90,35 @@ class CRUDIliskiliMuvekkil(CRUDBase[IliskiliMuvekkil, IliskiliMuvekkillCreate, I
         await db.commit()
         await db.refresh(iliskili)
         return iliskili
+
+    async def name_exists_in_org(
+        self,
+        db: AsyncSession,
+        *,
+        unvan: MuvekkilUnvan,
+        first_name: str,
+        last_name: str,
+        organization_id: UUID,
+        exclude_id: Optional[UUID] = None,
+    ) -> bool:
+        """
+        Case-insensitive duplicate check on (unvan, first_name, last_name)
+        scoped to a single organization. Mirrors the unique index added by
+        the j0k1l2m3n4o5 migration.
+        """
+        query = (
+            select(IliskiliMuvekkil.id)
+            .where(
+                IliskiliMuvekkil.organization_id == organization_id,
+                IliskiliMuvekkil.unvan == unvan,
+                func.lower(IliskiliMuvekkil.first_name) == first_name.lower(),
+                func.lower(IliskiliMuvekkil.last_name) == last_name.lower(),
+            )
+        )
+        if exclude_id is not None:
+            query = query.where(IliskiliMuvekkil.id != exclude_id)
+        result = await db.execute(query.limit(1))
+        return result.scalar_one_or_none() is not None
 
     async def email_exists_in_org(
         self,
