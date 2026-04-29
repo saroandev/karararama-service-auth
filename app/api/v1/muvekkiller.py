@@ -20,7 +20,7 @@ from app.schemas import (
 )
 from app.schemas.muvekkil import MuvekkillListResponse
 from app.schemas.iliskili_muvekkil import IliskiliMuvekkillResponse
-from app.api.deps import get_current_active_user, require_role
+from app.api.deps import get_current_active_user
 
 router = APIRouter()
 
@@ -29,7 +29,7 @@ router = APIRouter()
 async def create_muvekkil(
     muvekkil_in: MuvekkillCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Create new muvekkil and attach it to the caller's organization (admin only).
@@ -135,7 +135,7 @@ async def list_muvekkiller(
 async def get_muvekkil(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Get muvekkil by ID with organizations (admin only).
@@ -169,7 +169,7 @@ async def update_muvekkil(
     muvekkil_id: UUID,
     muvekkil_in: MuvekkillUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Update muvekkil (admin only).
@@ -217,7 +217,7 @@ async def update_muvekkil(
 async def delete_muvekkil(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Delete muvekkil (admin only).
@@ -254,7 +254,7 @@ async def add_organization_to_muvekkil(
     muvekkil_id: UUID,
     organization_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Add organization to muvekkil (admin only).
@@ -302,7 +302,7 @@ async def remove_organization_from_muvekkil(
     muvekkil_id: UUID,
     organization_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Remove organization from muvekkil (admin only).
@@ -349,7 +349,7 @@ async def remove_organization_from_muvekkil(
 async def get_muvekkil_organizations(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Get all organizations for a muvekkil (admin only).
@@ -390,7 +390,7 @@ def _check_muvekkil_org_access(
 async def list_assigned_iliskili_muvekkiller(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"]))
+    current_user: User = Depends(get_current_active_user)
 ):
     """List iliskili muvekkiller assigned to this muvekkil."""
     muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)

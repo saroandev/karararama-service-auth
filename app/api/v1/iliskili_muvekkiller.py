@@ -17,7 +17,7 @@ from app.schemas.iliskili_muvekkil import (
     IliskiliMuvekkillResponse,
     IliskiliMuvekkillAssign,
 )
-from app.api.deps import get_current_active_user, require_role
+from app.api.deps import get_current_active_user
 
 router = APIRouter()
 
@@ -64,7 +64,7 @@ async def create_iliskili_muvekkil(
     data_in: IliskiliMuvekkillCreate,
     organization_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Create a new iliskili muvekkil (related client)."""
     target_org_id = _resolve_org_id(current_user, organization_id)
@@ -126,7 +126,7 @@ async def list_iliskili_muvekkiller(
 async def get_iliskili_muvekkil(
     iliskili_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get a single iliskili muvekkil by ID."""
     record = await iliskili_muvekkil_crud.get(db, id=iliskili_id)
@@ -141,7 +141,7 @@ async def update_iliskili_muvekkil(
     iliskili_id: UUID,
     data_in: IliskiliMuvekkillUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Update an iliskili muvekkil."""
     record = await iliskili_muvekkil_crud.get(db, id=iliskili_id)
@@ -190,7 +190,7 @@ async def update_iliskili_muvekkil(
 async def delete_iliskili_muvekkil(
     iliskili_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Delete an iliskili muvekkil."""
     record = await iliskili_muvekkil_crud.get(db, id=iliskili_id)
@@ -205,7 +205,7 @@ async def assign_iliskili_muvekkil(
     iliskili_id: UUID,
     body: IliskiliMuvekkillAssign,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Assign an iliskili muvekkil to a muvekkil."""
     record = await iliskili_muvekkil_crud.get(db, id=iliskili_id)
@@ -230,7 +230,7 @@ async def assign_iliskili_muvekkil(
 async def unassign_iliskili_muvekkil(
     iliskili_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "superuser"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Unassign an iliskili muvekkil (return to pool)."""
     record = await iliskili_muvekkil_crud.get(db, id=iliskili_id)
