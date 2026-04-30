@@ -82,6 +82,12 @@ from app.schemas.uets_account import (
     UetsAccountItem,
     UetsAccountListResponse,
 )
+from app.schemas.uyap_account import (
+    UyapAccountCreate,
+    UyapAccountResponse,
+    UyapAccountItem,
+    UyapAccountListResponse,
+)
 from app.schemas.muvekkil import (
     MuvekkillBase,
     MuvekkillCreate,
@@ -152,6 +158,11 @@ __all__ = [
     "UetsAccountResponse",
     "UetsAccountItem",
     "UetsAccountListResponse",
+    # UYAP Account
+    "UyapAccountCreate",
+    "UyapAccountResponse",
+    "UyapAccountItem",
+    "UyapAccountListResponse",
     # Invitation
     "InvitationBase",
     "InvitationCreate",
