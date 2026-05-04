@@ -16,6 +16,30 @@ from app.models import Role, User
 from app.models.user import user_roles
 
 
+def compact_permissions(permissions: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Drop permission entries that are already covered by a wildcard.
+
+    `*:*` collapses the whole list to a single entry. Otherwise any specific
+    `(r, a)` covered by an existing `(r, *)` or `(*, a)` is dropped. The
+    matching contract here mirrors `JWTPayload.has_permission`.
+    """
+    perm_set = {(p["resource"], p["action"]) for p in permissions}
+
+    if ("*", "*") in perm_set:
+        return [{"resource": "*", "action": "*"}]
+
+    wildcard_resources = {r for (r, a) in perm_set if a == "*" and r != "*"}
+    wildcard_actions = {a for (r, a) in perm_set if r == "*" and a != "*"}
+
+    compacted: List[Dict[str, str]] = []
+    for perm in permissions:
+        r, a = perm["resource"], perm["action"]
+        if r != "*" and a != "*" and (r in wildcard_resources or a in wildcard_actions):
+            continue
+        compacted.append(perm)
+    return compacted
+
+
 async def get_active_org_roles(db: AsyncSession, user: User) -> List[Role]:
     """Return roles assigned to the user scoped to their active organization.
 
@@ -52,7 +76,7 @@ async def build_user_token_payload(
 
     roles = [role.name for role in active_roles]
 
-    permissions = []
+    permissions: List[Dict[str, str]] = []
     seen = set()
     for role in active_roles:
         for perm in role.permissions:
@@ -61,6 +85,7 @@ async def build_user_token_payload(
                 continue
             seen.add(key)
             permissions.append({"resource": perm.resource, "action": perm.action})
+    permissions = compact_permissions(permissions)
 
     data_access = get_data_access_for_user(user, roles=active_roles)
     # JWT 'role' = aktif organizasyondaki gerçek rol adı.
