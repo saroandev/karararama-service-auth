@@ -5,6 +5,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -79,7 +80,7 @@ async def create_iliskili_muvekkil(
         )
         if exists:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı",
             )
 
@@ -92,11 +93,20 @@ async def create_iliskili_muvekkil(
     )
     if name_exists:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Bu unvan ve ad-soyad ile bir ilişkili müvekkil zaten kayıtlı",
         )
 
-    created = await iliskili_muvekkil_crud.create(db, obj_in=data_in, organization_id=target_org_id)
+    try:
+        created = await iliskili_muvekkil_crud.create(
+            db, obj_in=data_in, organization_id=target_org_id,
+        )
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu unvan ve ad-soyad ile bir ilişkili müvekkil zaten kayıtlı",
+        )
     return created
 
 
@@ -155,7 +165,7 @@ async def update_iliskili_muvekkil(
         )
         if exists:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı",
             )
 
@@ -178,11 +188,18 @@ async def update_iliskili_muvekkil(
         )
         if name_exists:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Bu unvan ve ad-soyad ile bir ilişkili müvekkil zaten kayıtlı",
             )
 
-    updated = await iliskili_muvekkil_crud.update(db, db_obj=record, obj_in=data_in)
+    try:
+        updated = await iliskili_muvekkil_crud.update(db, db_obj=record, obj_in=data_in)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu unvan ve ad-soyad ile bir ilişkili müvekkil zaten kayıtlı",
+        )
     return updated
 
 

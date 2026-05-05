@@ -111,8 +111,8 @@ class CRUDIliskiliMuvekkil(CRUDBase[IliskiliMuvekkil, IliskiliMuvekkillCreate, I
             .where(
                 IliskiliMuvekkil.organization_id == organization_id,
                 IliskiliMuvekkil.unvan == unvan,
-                func.lower(IliskiliMuvekkil.first_name) == first_name.lower(),
-                func.lower(IliskiliMuvekkil.last_name) == last_name.lower(),
+                func.lower(IliskiliMuvekkil.first_name) == func.lower(first_name),
+                func.lower(IliskiliMuvekkil.last_name) == func.lower(last_name),
             )
         )
         if exclude_id is not None:
