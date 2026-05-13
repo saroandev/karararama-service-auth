@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.crud.base import CRUDBase
 from app.models import Invitation
 from app.models.invitation import InvitationStatus
@@ -99,7 +100,7 @@ class CRUDInvitation(CRUDBase[Invitation, InvitationCreate, InvitationResponse])
         organization_id: UUID,
         invited_by_user_id: UUID,
         role: str = "member",
-        expires_in_days: int = 7
+        expires_in_days: Optional[int] = None,
     ) -> Invitation:
         """
         Create invitation with auto-generated token.
@@ -110,11 +111,14 @@ class CRUDInvitation(CRUDBase[Invitation, InvitationCreate, InvitationResponse])
             organization_id: Organization ID
             invited_by_user_id: User who is inviting
             role: Role to assign (default: member)
-            expires_in_days: Days until expiration (default: 7)
+            expires_in_days: Days until expiration (default: settings.INVITATION_EXPIRE_DAYS)
 
         Returns:
             Created invitation
         """
+        if expires_in_days is None:
+            expires_in_days = settings.INVITATION_EXPIRE_DAYS
+
         # Generate unique token
         token = str(uuid4())
 
@@ -154,6 +158,29 @@ class CRUDInvitation(CRUDBase[Invitation, InvitationCreate, InvitationResponse])
         """
         invitation.status = InvitationStatus.ACCEPTED
         invitation.accepted_at = datetime.utcnow()
+
+        db.add(invitation)
+        await db.commit()
+        await db.refresh(invitation)
+        return invitation
+
+    async def mark_expired(
+        self,
+        db: AsyncSession,
+        *,
+        invitation: Invitation
+    ) -> Invitation:
+        """
+        Mark a single invitation as expired.
+
+        Args:
+            db: Database session
+            invitation: Invitation to mark as expired
+
+        Returns:
+            Updated invitation
+        """
+        invitation.status = InvitationStatus.EXPIRED
 
         db.add(invitation)
         await db.commit()

@@ -3,11 +3,14 @@ Email service for sending verification emails via SMTP.
 """
 import os
 import logging
+from typing import Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import aiosmtplib
 from jinja2 import Template
+
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -438,7 +441,7 @@ async def send_invitation_email(
     role: str,
     invitation_token: str,
     expires_at: str,
-    expires_in_days: int = 7
+    expires_in_days: Optional[int] = None,
 ) -> bool:
     """
     Send organization invitation email.
@@ -451,11 +454,13 @@ async def send_invitation_email(
         role: Role being assigned (org-admin, lawyer, etc.)
         invitation_token: UUID token for invitation acceptance
         expires_at: Expiration datetime as string
-        expires_in_days: Number of days until expiration (default: 7)
+        expires_in_days: Number of days until expiration (default: settings.INVITATION_EXPIRE_DAYS)
 
     Returns:
         True if email sent successfully, False otherwise
     """
+    if expires_in_days is None:
+        expires_in_days = settings.INVITATION_EXPIRE_DAYS
     try:
         # Get frontend URL from environment or use default
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")

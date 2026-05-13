@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     PASSWORD_RESET_RATE_LIMIT_WINDOW_HOURS: int = 1
     FRONTEND_RESET_PASSWORD_URL: str = "http://localhost:3000/reset-password"
 
+    # Invitations
+    INVITATION_EXPIRE_DAYS: int = 7
+
     # pgAdmin (optional, not used in app)
     PGADMIN_DEFAULT_EMAIL: str = "admin@onedocs.com"
     PGADMIN_DEFAULT_PASSWORD: str = "admin123"

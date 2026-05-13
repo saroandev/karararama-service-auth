@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.crud import organization_crud, user_crud, role_crud, invitation_crud, muvekkil_crud, organization_member_crud
 from app.models import OrganizationMember, User, Organization, Invitation, InvitationStatus, RefreshToken
@@ -375,30 +376,47 @@ async def invite_users_to_organization(
             detail="Sistemde böyle bir kullanıcı bulunmamaktadır."
         )
 
-    # Create invitations
-    created_invitations = []
+    # Pre-flight: classify each email against existing invitations so we either
+    # fail fast on a true conflict or lazily flip stale PENDING rows to EXPIRED
+    # before re-inviting.
+    conflict_emails: List[str] = []
+    expired_to_mark: List[Invitation] = []
     for email in invite_in.emails:
-        # Check if email already has pending invitation
         existing_invitation = await invitation_crud.get_by_email_and_org(
             db,
             email=email,
-            organization_id=current_user.organization_id
+            organization_id=current_user.organization_id,
+        )
+        if existing_invitation is None:
+            continue
+        if existing_invitation.is_expired:
+            expired_to_mark.append(existing_invitation)
+        else:
+            conflict_emails.append(email)
+
+    if conflict_emails:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Bu e-posta adres(ler)ine zaten aktif bir davet gönderilmiş: "
+                f"{', '.join(conflict_emails)}"
+            ),
         )
 
-        if existing_invitation:
-            # Skip if already pending, otherwise create new one
-            if existing_invitation.status == InvitationStatus.PENDING:
-                print(f"⚠️  Email {email} zaten bekleyen bir davete sahip, atlanıyor...")
-                continue
+    # Flip stale PENDING rows to EXPIRED so the re-invite below is unblocked.
+    for stale in expired_to_mark:
+        await invitation_crud.mark_expired(db, invitation=stale)
 
-        # Create invitation
+    # Create invitations
+    created_invitations = []
+    for email in invite_in.emails:
         invitation = await invitation_crud.create_with_token(
             db,
             email=email,
             organization_id=current_user.organization_id,
             invited_by_user_id=current_user.id,
             role=invite_in.role,
-            expires_in_days=7
+            expires_in_days=settings.INVITATION_EXPIRE_DAYS,
         )
 
         created_invitations.append(invitation)
@@ -424,7 +442,7 @@ async def invite_users_to_organization(
                 role=invite_in.role,
                 invitation_token=str(invitation.token),
                 expires_at=expires_at_str,
-                expires_in_days=7
+                expires_in_days=settings.INVITATION_EXPIRE_DAYS,
             )
 
             if email_sent:
@@ -435,12 +453,6 @@ async def invite_users_to_organization(
         except Exception as e:
             # Don't fail the invitation creation if email fails
             print(f"⚠️  Invitation created but email error for {email}: {str(e)}")
-
-    if not created_invitations:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tüm emailler zaten davet edilmiş durumda"
-        )
 
     return created_invitations
 
