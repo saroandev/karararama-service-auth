@@ -69,6 +69,7 @@ async def seed_permissions(db: AsyncSession):
         ("billing", "view", "Fatura görüntüleme"),
         ("billing", "view_plan", "Plan görüntüleme"),
         ("billing", "change_plan", "Plan değiştirme"),
+        ("billing", "create_order", "Sipariş oluşturma"),
         ("billing", "manage_payment", "Ödeme yöntemi yönetme"),
         ("billing", "download_invoices", "Fatura indirme"),
         ("billing", "cancel_subscription", "Abonelik iptali"),

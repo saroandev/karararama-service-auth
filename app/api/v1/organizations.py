@@ -356,6 +356,28 @@ async def invite_users_to_organization(
 
     organization = await organization_crud.get(db, id=current_user.organization_id)
 
+    # Seat enforcement — only paid plans set a seat_count. Free trial orgs
+    # implicitly allow Solo (1 seat) and reject any invite; once Subscription
+    # activates the cap will be the seat count purchased.
+    if organization.seat_count is not None:
+        # Existing memberships already account for active users
+        current_member_count = len(organization.memberships) if organization.memberships is not None else 0
+        # Pending (non-expired) invitations also occupy a future seat
+        pending_invites = await invitation_crud.list_pending_for_organization(
+            db, organization_id=current_user.organization_id
+        ) if hasattr(invitation_crud, "list_pending_for_organization") else []
+        pending_count = sum(1 for inv in pending_invites if not inv.is_expired)
+        new_invites = len(invite_in.emails)
+        if current_member_count + pending_count + new_invites > organization.seat_count:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Plan koltuk limitine ulaştınız: "
+                    f"{current_member_count + pending_count}/{organization.seat_count}. "
+                    f"Daha fazla kullanıcı eklemek için planınızı yükseltin."
+                ),
+            )
+
     # Validate role (cannot invite as owner)
     if invite_in.role.lower() == "owner":
         raise HTTPException(

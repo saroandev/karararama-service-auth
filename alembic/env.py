@@ -24,6 +24,8 @@ from app.models import (
     ActivityWatchToken,
     Organization,
     Invitation,
+    Payment,
+    Subscription,
 )
 
 # this is the Alembic Config object

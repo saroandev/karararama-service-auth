@@ -18,6 +18,8 @@ from app.models.password_reset import PasswordResetToken
 from app.models.muvekkil import Muvekkil, MuvekkilUnvan, muvekkil_organizations
 from app.models.iliskili_muvekkil import IliskiliMuvekkil
 from app.models.department import Department
+from app.models.payment import Payment
+from app.models.subscription import Subscription
 
 __all__ = [
     "Organization",
@@ -39,6 +41,8 @@ __all__ = [
     "MuvekkilUnvan",
     "IliskiliMuvekkil",
     "Department",
+    "Payment",
+    "Subscription",
     "user_roles",
     "role_permissions",
     "muvekkil_organizations",

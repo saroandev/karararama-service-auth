@@ -1,7 +1,7 @@
 """
 Organization model for multi-tenancy and data access control.
 """
-from sqlalchemy import Boolean, Column, String, ForeignKey
+from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -34,6 +34,16 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     organization_type = Column(String(50), nullable=True)  # "law-firm", "legal-department", "other"
     organization_size = Column(String(20), nullable=True)  # "1-9", "10-49", "50-200", "200+"
     is_active = Column(Boolean, default=True, nullable=False, index=True)
+
+    # Billing / plan (source of truth — User.plan kept for back-compat only)
+    plan = Column(String(50), default="free_trial", nullable=False, index=True)
+    plan_started_at = Column(DateTime, nullable=True)
+    plan_expires_at = Column(DateTime, nullable=True)
+    billing_cycle = Column(String(20), nullable=True)         # yearly | sixmonth
+    seat_count = Column(Integer, nullable=True)               # max members allowed by plan
+    storage_gb_per_user = Column(Numeric(6, 2), nullable=True)
+    trial_started_at = Column(DateTime, nullable=True)
+    trial_ends_at = Column(DateTime, nullable=True)
 
     # Relationships
     users = relationship(

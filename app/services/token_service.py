@@ -106,6 +106,29 @@ async def build_user_token_payload(
         for membership in memberships
     ]
 
+    # Plan now lives on the organization (Solo/Team/Elite/Enterprise). For
+    # legacy compatibility we fall back to user.plan when no org plan exists.
+    org_plan = None
+    org_plan_expires_at = None
+    org_trial_ends_at = None
+    org_seat_count = None
+    org_storage_gb_per_user = None
+    if user.organization is not None:
+        org_plan = user.organization.plan
+        org_plan_expires_at = user.organization.plan_expires_at
+        org_trial_ends_at = user.organization.trial_ends_at
+        org_seat_count = user.organization.seat_count
+        # Decimal → float for JSON serialization
+        if user.organization.storage_gb_per_user is not None:
+            org_storage_gb_per_user = float(user.organization.storage_gb_per_user)
+
+    plan = org_plan or user.plan or "free_trial"
+    trial_ends_at_iso = (
+        org_trial_ends_at.isoformat() if org_trial_ends_at
+        else (user.trial_ends_at.isoformat() if user.trial_ends_at else None)
+    )
+    plan_expires_at_iso = org_plan_expires_at.isoformat() if org_plan_expires_at else None
+
     return {
         "sub": str(user.id),
         "organization_id": str(user.organization_id) if user.organization_id else None,
@@ -121,6 +144,9 @@ async def build_user_token_payload(
             "daily_document_limit": user.daily_document_upload_limit,
         },
         "organizations": organizations,
-        "plan": user.plan,
-        "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
+        "plan": plan,
+        "plan_expires_at": plan_expires_at_iso,
+        "trial_ends_at": trial_ends_at_iso,
+        "seat_count": org_seat_count,
+        "storage_gb_per_user": org_storage_gb_per_user,
     }

@@ -59,6 +59,18 @@ class Settings(BaseSettings):
     # Invitations
     INVITATION_EXPIRE_DAYS: int = 7
 
+    # Billing / PayTR
+    # Merchant key/salt are used to verify the PayTR callback hash. The same
+    # secret the frontend uses for token generation; required in production.
+    PAYTR_MERCHANT_ID: str = ""
+    PAYTR_MERCHANT_KEY: str = ""
+    PAYTR_MERCHANT_SALT: str = ""
+    # Shared secret between frontend's payment callback route and this service.
+    INTERNAL_API_TOKEN: str = ""
+    # USD→TRY rate used at order creation. Update via env or operations runbook;
+    # frontend reads it back from /billing/plans. Override locally for testing.
+    USD_TRY_RATE: float = 32.50
+
     # pgAdmin (optional, not used in app)
     PGADMIN_DEFAULT_EMAIL: str = "admin@onedocs.com"
     PGADMIN_DEFAULT_PASSWORD: str = "admin123"

@@ -270,13 +270,22 @@ async def login(
     # Update last login
     await user_crud.update_last_login(db, user=user)
 
-    # Check trial expiry and update plan if needed
-    if user.plan == "free_trial" and user.trial_ends_at:
-        if datetime.utcnow() > user.trial_ends_at:
-            user.plan = "expired_trial"
-            db.add(user)
+    # Expire the org plan if needed. Plan now lives on the organization;
+    # we mutate it here so the JWT picks up the latest state without a separate cron.
+    org = user.organization
+    if org is not None:
+        now = datetime.utcnow()
+        plan_mutated = False
+        if org.plan == "free_trial" and org.trial_ends_at and now > org.trial_ends_at:
+            org.plan = "expired_trial"
+            plan_mutated = True
+        elif org.plan in {"solo", "team", "elite", "enterprise"} and org.plan_expires_at and now > org.plan_expires_at:
+            org.plan = "expired_subscription"
+            plan_mutated = True
+        if plan_mutated:
+            db.add(org)
             await db.commit()
-            await db.refresh(user)
+            await db.refresh(org)
 
     # Build JWT payload (roles, permissions, quotas, organizations)
     token_data = await build_user_token_payload(db, user)
