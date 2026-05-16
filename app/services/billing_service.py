@@ -33,6 +33,7 @@ from app.core.plans import (
     validate_seat_count,
 )
 from app.models import Organization, Payment, Subscription, User
+from app.services.exchange_rate import get_usd_try_rate
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,33 @@ async def create_order(
         )
 
     definition = PLAN_CATALOG[plan]
-    rate = Decimal(str(settings.USD_TRY_RATE))
+    # Live USD→TRY rate (with fallback chain). Source recorded in logs.
+    live_rate, rate_source = get_usd_try_rate()
+    rate = Decimal(str(live_rate))
     total_usd = Decimal(str(calculate_total_usd(plan, seat_count, billing_cycle)))
     total_try = (total_usd * rate).quantize(Decimal("0.01"))
     amount_kurus = int(total_try * 100)
+
+    # Test override — replaces the kuruş amount but keeps the USD/rate snapshot
+    # honest so accounting still shows what would have been charged at full price.
+    if (
+        settings.BILLING_TEST_OVERRIDE_AMOUNT_KURUS > 0
+        and settings.BILLING_TEST_OVERRIDE_PLAN == plan
+    ):
+        logger.warning(
+            "BILLING TEST OVERRIDE active: plan=%s seats=%s cycle=%s original=%s kuruş → %s kuruş",
+            plan,
+            seat_count,
+            billing_cycle,
+            amount_kurus,
+            settings.BILLING_TEST_OVERRIDE_AMOUNT_KURUS,
+        )
+        amount_kurus = settings.BILLING_TEST_OVERRIDE_AMOUNT_KURUS
+
+    logger.info(
+        "Order: plan=%s seats=%s cycle=%s usd=%s rate=%s(%s) kuruş=%s",
+        plan, seat_count, billing_cycle, total_usd, rate, rate_source, amount_kurus,
+    )
 
     payment = Payment(
         user_id=user.id,

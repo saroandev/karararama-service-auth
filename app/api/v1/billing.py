@@ -23,6 +23,7 @@ from app.schemas.billing import (
     SubscriptionResponse,
 )
 from app.services import billing_service
+from app.services.exchange_rate import get_usd_try_rate
 
 router = APIRouter()
 
@@ -34,7 +35,11 @@ router = APIRouter()
 
 @router.get("/plans", response_model=PlanCatalogResponse, summary="Plan catalog")
 async def list_plans() -> PlanCatalogResponse:
-    """Frontend reads this when rendering the pricing page."""
+    """Frontend reads this when rendering the pricing page.
+
+    The exchange rate is fetched live from TCMB (cached 15 min); see
+    `app/services/exchange_rate.py` for fallback chain.
+    """
     items: List[PlanItem] = []
     for plan_id, definition in PLAN_CATALOG.items():
         items.append(
@@ -48,7 +53,8 @@ async def list_plans() -> PlanCatalogResponse:
                 contact_sales_only=definition["contact_sales_only"],
             )
         )
-    return PlanCatalogResponse(plans=items, exchange_rate_usd_try=settings.USD_TRY_RATE)
+    rate, _source = get_usd_try_rate()
+    return PlanCatalogResponse(plans=items, exchange_rate_usd_try=rate)
 
 
 # ---------------------------------------------------------------------------

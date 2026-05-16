@@ -67,9 +67,18 @@ class Settings(BaseSettings):
     PAYTR_MERCHANT_SALT: str = ""
     # Shared secret between frontend's payment callback route and this service.
     INTERNAL_API_TOKEN: str = ""
-    # USD→TRY rate used at order creation. Update via env or operations runbook;
-    # frontend reads it back from /billing/plans. Override locally for testing.
+    # USD→TRY rate used only as a last-resort fallback when TCMB and the
+    # public fallback API both fail. Live rate is fetched per-call (cached
+    # 15 min) by app/services/exchange_rate.py.
     USD_TRY_RATE: float = 32.50
+
+    # Test ödeme override — gerçek PayTR akışını cüzi tutarla doğrulamak için.
+    # `BILLING_TEST_OVERRIDE_AMOUNT_KURUS` 0'dan büyükse,
+    # `BILLING_TEST_OVERRIDE_PLAN` planı için order oluştururken hesaplanan
+    # tutar görmezden gelinip bu sabit kuruş tutarı PayTR'a gönderilir.
+    # Test bittikten sonra ENV'i kaldır / 0 yap.
+    BILLING_TEST_OVERRIDE_PLAN: str = ""        # ör: "solo"
+    BILLING_TEST_OVERRIDE_AMOUNT_KURUS: int = 0  # ör: 100  → 1.00 TL
 
     # pgAdmin (optional, not used in app)
     PGADMIN_DEFAULT_EMAIL: str = "admin@onedocs.com"
