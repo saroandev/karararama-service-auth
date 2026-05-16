@@ -63,9 +63,11 @@ async def create_order(
     if plan not in PLAN_CATALOG:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown plan: {plan}")
     if PLAN_CATALOG[plan]["contact_sales_only"]:
+        # Team/Elite/Enterprise satislari sales ekibi yurutuyor; self-service
+        # PayTR akisi sadece Solo'ya acik.
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Enterprise plans are sales-managed; this endpoint cannot be used.",
+            f"{PLAN_CATALOG[plan]['name']} paketi satis ekibi tarafindan satilir; lutfen iletisime gecin.",
         )
     if billing_cycle not in BILLING_CYCLES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown billing cycle: {billing_cycle}")

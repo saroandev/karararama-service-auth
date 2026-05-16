@@ -20,6 +20,10 @@ class PlanDefinition(TypedDict):
     contact_sales_only: bool
 
 
+# `contact_sales_only`:
+#   True  → frontend "Iletisime Gec" gosterir, /odeme akisi kapali; backend
+#           /billing/orders bu plan icin 400 doner (sadece Solo self-service).
+#   False → /odeme akisi acik (PayTR ile self-service satin alma).
 PLAN_CATALOG: dict[str, PlanDefinition] = {
     "solo": {
         "name": "Solo",
@@ -35,7 +39,9 @@ PLAN_CATALOG: dict[str, PlanDefinition] = {
         "max_users": 9,
         "price_usd_per_user_monthly": 40,
         "storage_gb_per_user": 5.0,
-        "contact_sales_only": False,
+        # Team/Elite/Enterprise satislari satis ekibi uzerinden yurutulur;
+        # self-service PayTR akisi simdilik sadece Solo'ya acik.
+        "contact_sales_only": True,
     },
     "elite": {
         "name": "Elite",
@@ -43,7 +49,7 @@ PLAN_CATALOG: dict[str, PlanDefinition] = {
         "max_users": 49,
         "price_usd_per_user_monthly": 35,
         "storage_gb_per_user": 7.5,
-        "contact_sales_only": False,
+        "contact_sales_only": True,
     },
     "enterprise": {
         "name": "Enterprise",
