@@ -1,10 +1,14 @@
 {% extends "oauth/_layout.html" %}
-{% block title %}OneDocs · Hata{% endblock %}
+{% block title %}Onedocs · Hata{% endblock %}
 {% block content %}
-  <h1>İstek tamamlanamadı</h1>
-  <div class="error">
+  <div class="title-block">
+    <h2>İstek tamamlanamadı</h2>
+  </div>
+  <div class="alert-error">
     <strong>{{ error }}</strong>
     {% if error_description %}<br>{{ error_description }}{% endif %}
   </div>
-  <p class="sub">Lütfen bağlandığınız uygulamadan tekrar deneyin.</p>
+  <p class="meta" style="text-align:center; padding-top: 16px;">
+    Lütfen bağlandığınız uygulamadan tekrar deneyin.
+  </p>
 {% endblock %}

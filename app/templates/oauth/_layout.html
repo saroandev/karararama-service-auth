@@ -4,115 +4,202 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>{% block title %}OneDocs{% endblock %}</title>
+  <title>{% block title %}Onedocs{% endblock %}</title>
   <style>
+    /* Design tokens lifted verbatim from karararama-frontend globals.css so
+       this server-rendered shell matches the React app's visual language
+       (light theme only — these pages are short OAuth flows). */
     :root {
-      color-scheme: light dark;
-      --bg: #0b0d12;
-      --card: #14171f;
-      --border: #232735;
-      --text: #e8eaf0;
-      --muted: #8a92a6;
-      --accent: #4f46e5;
-      --accent-hover: #4338ca;
-      --danger: #b91c1c;
-      --danger-text: #fecaca;
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #f6f7fa;
-        --card: #ffffff;
-        --border: #e5e7eb;
-        --text: #111418;
-        --muted: #6b7280;
-      }
+      --background:           oklch(1 0 0);
+      --foreground:           oklch(0.18 0 0);
+      --muted:                oklch(0.95 0 0);
+      --muted-foreground:     oklch(0.45 0 0);
+      --border:               oklch(0.88 0 0);
+      --primary:              oklch(0.26 0.008 260);
+      --primary-foreground:   oklch(0.98 0 0);
+      --destructive:          oklch(0.5 0.2 25);
+      --destructive-foreground: oklch(0.98 0 0);
+      --success:              oklch(0.45 0.12 145);
+      --success-foreground:   oklch(0.98 0 0);
+      --radius-xl: 0.75rem;
+      --radius-lg: 0.5rem;
+      --radius-md: 0.375rem;
+      --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.06);
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
     * { box-sizing: border-box; }
     html, body {
-      margin: 0; padding: 0; min-height: 100%;
-      background: var(--bg); color: var(--text);
-      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0; padding: 0;
+      background: color-mix(in oklch, var(--muted) 20%, var(--background));
+      color: var(--foreground);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
-    main {
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 24px;
+    .page {
+      min-height: 100dvh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 16px;
     }
     .card {
-      width: 100%; max-width: 420px;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 12px; padding: 28px 28px 24px;
+      width: 100%; max-width: 400px;
+      background: var(--background);
+      border: 1px solid color-mix(in oklch, var(--border) 40%, transparent);
+      border-radius: var(--radius-xl);
+      padding: 32px;
+      box-shadow: var(--shadow-card);
     }
-    .brand {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 22px;
+    @media (min-width: 640px) { .card { padding: 40px; } }
+    .logo-wrap {
+      display: flex; justify-content: center;
+      margin-bottom: 32px;
     }
-    .brand .dot {
-      width: 28px; height: 28px; border-radius: 7px;
-      background: linear-gradient(135deg, #6366f1, #ec4899);
+    .logo {
+      width: 36px; height: 36px;
+      object-fit: contain;
     }
-    .brand .name {
-      font-weight: 600; letter-spacing: -0.01em; font-size: 15px;
+    .title-block {
+      text-align: center;
+      margin-bottom: 28px;
     }
-    h1 { font-size: 18px; margin: 0 0 6px; letter-spacing: -0.01em; }
-    .sub { color: var(--muted); margin: 0 0 18px; }
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-    input[type=email], input[type=password], input[type=text] {
-      width: 100%; padding: 10px 12px;
-      background: transparent; color: var(--text);
-      border: 1px solid var(--border); border-radius: 8px;
+    h1, h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--foreground);
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      margin-top: 6px;
+    }
+    form { display: flex; flex-direction: column; gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--foreground);
+    }
+    input[type="email"], input[type="password"], input[type="text"] {
+      height: 40px;
+      width: 100%;
+      padding: 0 12px;
       font-size: 14px;
+      color: var(--foreground);
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-    .field { margin-bottom: 14px; }
-    .actions { display: flex; gap: 8px; margin-top: 8px; }
-    button, .button {
-      display: inline-flex; align-items: center; justify-content: center;
-      padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--card); color: var(--text);
-      font-size: 14px; cursor: pointer; font-weight: 500;
+    input[type="email"]:focus,
+    input[type="password"]:focus,
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 12%, transparent);
     }
-    button.primary, .button.primary {
-      background: var(--accent); color: white; border-color: var(--accent);
+    .btn {
+      display: inline-flex;
+      align-items: center; justify-content: center;
+      height: 40px;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.15s, background 0.15s;
+      border: 1px solid transparent;
     }
-    button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-    button.full { width: 100%; }
-    .error {
-      background: rgba(185, 28, 28, 0.12); color: var(--danger-text);
-      border: 1px solid rgba(185, 28, 28, 0.35);
-      padding: 10px 12px; border-radius: 8px; font-size: 13px;
-      margin-bottom: 14px;
+    .btn-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary {
+      background: var(--background);
+      color: var(--foreground);
+      border-color: var(--border);
+    }
+    .btn-secondary:hover {
+      background: color-mix(in oklch, var(--muted) 60%, var(--background));
+    }
+    .btn-full { width: 100%; }
+    .alert-error {
+      background: color-mix(in oklch, var(--destructive) 10%, transparent);
+      color: var(--destructive);
+      border: 1px solid color-mix(in oklch, var(--destructive) 20%, transparent);
+      font-size: 13px;
+      padding: 12px;
+      border-radius: var(--radius-lg);
     }
     .scope-list {
-      list-style: none; padding: 0; margin: 12px 0 18px;
-      border: 1px solid var(--border); border-radius: 8px;
+      list-style: none; padding: 0; margin: 16px 0 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
     }
     .scope-list li {
-      padding: 10px 12px; border-bottom: 1px solid var(--border);
-      display: flex; gap: 10px; align-items: flex-start;
+      padding: 14px 16px;
+      display: flex; align-items: flex-start; gap: 12px;
+      border-bottom: 1px solid var(--border);
     }
     .scope-list li:last-child { border-bottom: 0; }
-    .scope-list .check {
-      width: 18px; height: 18px; border-radius: 4px;
-      background: rgba(79, 70, 229, 0.18); color: #a5b4fc;
+    .scope-check {
+      flex-shrink: 0;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--primary-foreground);
       display: inline-flex; align-items: center; justify-content: center;
-      flex-shrink: 0; font-weight: 700; font-size: 12px;
+      font-weight: 700; font-size: 11px;
+      margin-top: 1px;
     }
-    .scope-list .label { color: var(--text); font-weight: 500; }
-    .scope-list .desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
-    .meta { color: var(--muted); font-size: 12px; margin-top: 14px; }
-    .meta strong { color: var(--text); font-weight: 500; }
-    code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .scope-text .label-row {
+      font-size: 13px; font-weight: 500; color: var(--foreground);
+    }
+    .scope-text .desc {
+      font-size: 12px; color: var(--muted-foreground); margin-top: 2px;
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .meta strong { color: var(--foreground); font-weight: 500; }
+    .footer-copy {
+      margin-top: 24px;
+      font-size: 11px;
+      color: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+    }
+    .actions-row { display: flex; flex-direction: column; gap: 8px; }
+    a { color: var(--foreground); }
   </style>
 </head>
 <body>
-  <main>
+  <div class="page">
     <div class="card">
-      <div class="brand">
-        <div class="dot" aria-hidden="true"></div>
-        <div class="name">OneDocs</div>
+      <div class="logo-wrap">
+        {# Inline-rendered logo: avoids cross-origin asset fetch on the OAuth
+           page. Replace this with an <img> when we publish a CDN-hosted SVG. #}
+        <svg class="logo" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"
+             aria-label="Onedocs">
+          <rect x="0" y="0" width="36" height="36" rx="8" fill="oklch(0.18 0 0)"/>
+          <text x="18" y="23" text-anchor="middle"
+                font-family="ui-sans-serif, system-ui, sans-serif"
+                font-size="18" font-weight="700" fill="white">o</text>
+        </svg>
       </div>
       {% block content %}{% endblock %}
     </div>
-  </main>
+    <p class="footer-copy">© 2026 Onedocs. Tüm hakları saklıdır.</p>
+  </div>
 </body>
 </html>

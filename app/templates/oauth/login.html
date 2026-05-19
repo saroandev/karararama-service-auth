@@ -1,25 +1,37 @@
 {% extends "oauth/_layout.html" %}
-{% block title %}OneDocs · Giriş{% endblock %}
+{% block title %}Onedocs · Giriş{% endblock %}
 {% block content %}
-  <h1>OneDocs hesabınıza giriş yapın</h1>
-  <p class="sub">{{ client_name }} adlı uygulama, hesabınıza erişim izni istiyor.</p>
-  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <div class="title-block">
+    <h2>Hoş geldiniz</h2>
+    <p class="subtitle">Onedocs hesabınıza giriş yapın</p>
+  </div>
+
+  {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+
   <form method="post" action="/oauth/login">
     <div class="field">
-      <label for="email">E-posta</label>
+      <label class="label" for="email">E-posta adresi</label>
       <input id="email" name="email" type="email" autocomplete="username"
+             placeholder="ad@firma.com"
              value="{{ email or '' }}" required autofocus>
     </div>
+
     <div class="field">
-      <label for="password">Şifre</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <label class="label" for="password">Şifre</label>
+      <input id="password" name="password" type="password"
+             autocomplete="current-password" placeholder="••••••••" required>
     </div>
-    {# Tüm OAuth params'ı POST handler'a aynen taşı #}
+
+    {# OAuth flow params forwarded to POST handler — pure transport. #}
     {% for k, v in oauth_params.items() %}
       <input type="hidden" name="{{ k }}" value="{{ v }}">
     {% endfor %}
-    <div class="actions">
-      <button type="submit" class="primary full">Giriş Yap ve İzin Ver</button>
-    </div>
+
+    <button type="submit" class="btn btn-primary btn-full">Giriş Yap</button>
   </form>
+
+  <p class="meta" style="text-align:center; padding-top: 0; border-top: 0; margin-top: 16px;">
+    <strong>{{ client_name }}</strong> uygulamasına bağlanmak için
+    Onedocs hesabınızla giriş yapın.
+  </p>
 {% endblock %}
