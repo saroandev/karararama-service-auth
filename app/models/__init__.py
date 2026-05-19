@@ -21,6 +21,9 @@ from app.models.department import Department
 from app.models.payment import Payment
 from app.models.subscription import Subscription
 from app.models.mcp_api_key import MCPApiKey
+from app.models.oauth_client import OAuthClient
+from app.models.oauth_authorization_code import OAuthAuthorizationCode
+from app.models.oauth_refresh_token import OAuthRefreshToken
 
 __all__ = [
     "Organization",
@@ -45,6 +48,9 @@ __all__ = [
     "Payment",
     "Subscription",
     "MCPApiKey",
+    "OAuthClient",
+    "OAuthAuthorizationCode",
+    "OAuthRefreshToken",
     "user_roles",
     "role_permissions",
     "muvekkil_organizations",

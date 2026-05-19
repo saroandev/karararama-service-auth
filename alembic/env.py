@@ -27,6 +27,9 @@ from app.models import (
     Payment,
     Subscription,
     MCPApiKey,
+    OAuthClient,
+    OAuthAuthorizationCode,
+    OAuthRefreshToken,
 )
 
 # this is the Alembic Config object

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}OneDocs{% endblock %}</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0b0d12;
+      --card: #14171f;
+      --border: #232735;
+      --text: #e8eaf0;
+      --muted: #8a92a6;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --danger: #b91c1c;
+      --danger-text: #fecaca;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f7fa;
+        --card: #ffffff;
+        --border: #e5e7eb;
+        --text: #111418;
+        --muted: #6b7280;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; min-height: 100%;
+      background: var(--bg); color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    main {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%; max-width: 420px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 28px 28px 24px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 22px;
+    }
+    .brand .dot {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: linear-gradient(135deg, #6366f1, #ec4899);
+    }
+    .brand .name {
+      font-weight: 600; letter-spacing: -0.01em; font-size: 15px;
+    }
+    h1 { font-size: 18px; margin: 0 0 6px; letter-spacing: -0.01em; }
+    .sub { color: var(--muted); margin: 0 0 18px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input[type=email], input[type=password], input[type=text] {
+      width: 100%; padding: 10px 12px;
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      font-size: 14px;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .field { margin-bottom: 14px; }
+    .actions { display: flex; gap: 8px; margin-top: 8px; }
+    button, .button {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text);
+      font-size: 14px; cursor: pointer; font-weight: 500;
+    }
+    button.primary, .button.primary {
+      background: var(--accent); color: white; border-color: var(--accent);
+    }
+    button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    button.full { width: 100%; }
+    .error {
+      background: rgba(185, 28, 28, 0.12); color: var(--danger-text);
+      border: 1px solid rgba(185, 28, 28, 0.35);
+      padding: 10px 12px; border-radius: 8px; font-size: 13px;
+      margin-bottom: 14px;
+    }
+    .scope-list {
+      list-style: none; padding: 0; margin: 12px 0 18px;
+      border: 1px solid var(--border); border-radius: 8px;
+    }
+    .scope-list li {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .scope-list li:last-child { border-bottom: 0; }
+    .scope-list .check {
+      width: 18px; height: 18px; border-radius: 4px;
+      background: rgba(79, 70, 229, 0.18); color: #a5b4fc;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-weight: 700; font-size: 12px;
+    }
+    .scope-list .label { color: var(--text); font-weight: 500; }
+    .scope-list .desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .meta { color: var(--muted); font-size: 12px; margin-top: 14px; }
+    .meta strong { color: var(--text); font-weight: 500; }
+    code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <div class="brand">
+        <div class="dot" aria-hidden="true"></div>
+        <div class="name">OneDocs</div>
+      </div>
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</body>
+</html>
