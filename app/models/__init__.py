@@ -20,6 +20,7 @@ from app.models.iliskili_muvekkil import IliskiliMuvekkil
 from app.models.department import Department
 from app.models.payment import Payment
 from app.models.subscription import Subscription
+from app.models.mcp_api_key import MCPApiKey
 
 __all__ = [
     "Organization",
@@ -43,6 +44,7 @@ __all__ = [
     "Department",
     "Payment",
     "Subscription",
+    "MCPApiKey",
     "user_roles",
     "role_permissions",
     "muvekkil_organizations",

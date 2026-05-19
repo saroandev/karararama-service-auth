@@ -26,6 +26,7 @@ from app.models import (
     Invitation,
     Payment,
     Subscription,
+    MCPApiKey,
 )
 
 # this is the Alembic Config object

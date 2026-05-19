@@ -120,6 +120,12 @@ class User(Base, UUIDMixin, TimestampMixin):
         lazy="select",
         uselist=False  # One-to-one relationship
     )
+    mcp_api_keys = relationship(
+        "MCPApiKey",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email})>"
