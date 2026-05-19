@@ -16,6 +16,7 @@ from app.crud import email_verification
 from app.crud.muvekkil import CRUDMuvekkil, muvekkil_crud
 from app.crud.iliskili_muvekkil import CRUDIliskiliMuvekkil, iliskili_muvekkil_crud
 from app.crud.department import CRUDDepartment, department_crud
+from app.crud.mcp_api_key import CRUDMcpApiKey, mcp_api_key_crud
 
 __all__ = [
     "CRUDOrganization",
@@ -47,4 +48,6 @@ __all__ = [
     "iliskili_muvekkil_crud",
     "CRUDDepartment",
     "department_crud",
+    "CRUDMcpApiKey",
+    "mcp_api_key_crud",
 ]
