@@ -265,6 +265,38 @@ async def get_organization_members(
     )
 
 
+@router.get("/me/storage")
+async def get_my_organization_storage(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Aktif organizasyonun toplam depolama kapasitesini (GB) döner.
+
+    total_storage_gb = seat_count * storage_gb_per_user. Plan değerleri
+    henüz set edilmediyse (free trial vb.) total_storage_gb null döner.
+    """
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kullanıcının organizasyonu yok",
+        )
+
+    organization = await organization_crud.get(db, id=current_user.organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı",
+        )
+
+    if organization.seat_count is None or organization.storage_gb_per_user is None:
+        total_storage_gb = None
+    else:
+        total_storage_gb = float(organization.storage_gb_per_user) * organization.seat_count
+
+    return {"total_storage_gb": total_storage_gb}
+
+
 @router.get("/me/stats", response_model=OrganizationWithStats)
 async def get_my_organization_stats(
     db: AsyncSession = Depends(get_db),
