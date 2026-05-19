@@ -1,0 +1,25 @@
+{% extends "oauth/_layout.html" %}
+{% block title %}OneDocs · Giriş{% endblock %}
+{% block content %}
+  <h1>OneDocs hesabınıza giriş yapın</h1>
+  <p class="sub">{{ client_name }} adlı uygulama, hesabınıza erişim izni istiyor.</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/oauth/login">
+    <div class="field">
+      <label for="email">E-posta</label>
+      <input id="email" name="email" type="email" autocomplete="username"
+             value="{{ email or '' }}" required autofocus>
+    </div>
+    <div class="field">
+      <label for="password">Şifre</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    {# Tüm OAuth params'ı POST handler'a aynen taşı #}
+    {% for k, v in oauth_params.items() %}
+      <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <div class="actions">
+      <button type="submit" class="primary full">Giriş Yap ve İzin Ver</button>
+    </div>
+  </form>
+{% endblock %}

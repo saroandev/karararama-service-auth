@@ -3,7 +3,7 @@ API v1 router.
 """
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, admin, usage, organizations, uets_accounts, uets_extension, uyap_accounts, uyap_extension, invitations, muvekkiller, departments, iliskili_muvekkiller, roles, billing, mcp
+from app.api.v1 import auth, users, admin, usage, organizations, uets_accounts, uets_extension, uyap_accounts, uyap_extension, invitations, muvekkiller, departments, iliskili_muvekkiller, roles, billing, mcp, oauth
 
 api_router = APIRouter()
 
@@ -23,3 +23,4 @@ api_router.include_router(iliskili_muvekkiller.router, prefix="/iliskili-muvekki
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
 api_router.include_router(mcp.router, prefix="/mcp", tags=["mcp"])
+api_router.include_router(oauth.router, prefix="/oauth", tags=["oauth"])

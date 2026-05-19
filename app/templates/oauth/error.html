@@ -1,0 +1,10 @@
+{% extends "oauth/_layout.html" %}
+{% block title %}OneDocs · Hata{% endblock %}
+{% block content %}
+  <h1>İstek tamamlanamadı</h1>
+  <div class="error">
+    <strong>{{ error }}</strong>
+    {% if error_description %}<br>{{ error_description }}{% endif %}
+  </div>
+  <p class="sub">Lütfen bağlandığınız uygulamadan tekrar deneyin.</p>
+{% endblock %}

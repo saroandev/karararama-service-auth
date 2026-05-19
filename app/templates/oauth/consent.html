@@ -1,0 +1,40 @@
+{% extends "oauth/_layout.html" %}
+{% block title %}OneDocs · İzin{% endblock %}
+{% block content %}
+  <h1>{{ client_name }} erişim istiyor</h1>
+  <p class="sub">OneDocs hesabınızda şu işlemleri yapabilecek:</p>
+
+  <ul class="scope-list">
+    {% for scope in scopes %}
+      <li>
+        <span class="check" aria-hidden="true">✓</span>
+        <div>
+          <div class="label">{{ scope.label }}</div>
+          <div class="desc">{{ scope.description }}</div>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form method="post" action="/oauth/consent">
+    {% for k, v in oauth_params.items() %}
+      <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <div class="actions">
+      <button type="submit" name="decision" value="allow" class="primary full">
+        İzin Ver
+      </button>
+    </div>
+    <div class="actions" style="margin-top: 8px;">
+      <button type="submit" name="decision" value="deny" class="full">
+        Reddet
+      </button>
+    </div>
+  </form>
+
+  <p class="meta">
+    Hesap: <strong>{{ user_email }}</strong><br>
+    Erişimi her zaman geri alabilirsiniz —
+    {{ client_name }} bağlantısını ayarlardan kaldırın.
+  </p>
+{% endblock %}

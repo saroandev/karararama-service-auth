@@ -17,6 +17,15 @@ from app.crud.muvekkil import CRUDMuvekkil, muvekkil_crud
 from app.crud.iliskili_muvekkil import CRUDIliskiliMuvekkil, iliskili_muvekkil_crud
 from app.crud.department import CRUDDepartment, department_crud
 from app.crud.mcp_api_key import CRUDMcpApiKey, mcp_api_key_crud
+from app.crud.oauth_client import CRUDOAuthClient, oauth_client_crud
+from app.crud.oauth_authorization_code import (
+    CRUDOAuthAuthorizationCode,
+    oauth_authorization_code_crud,
+)
+from app.crud.oauth_refresh_token import (
+    CRUDOAuthRefreshToken,
+    oauth_refresh_token_crud,
+)
 
 __all__ = [
     "CRUDOrganization",
@@ -50,4 +59,10 @@ __all__ = [
     "department_crud",
     "CRUDMcpApiKey",
     "mcp_api_key_crud",
+    "CRUDOAuthClient",
+    "oauth_client_crud",
+    "CRUDOAuthAuthorizationCode",
+    "oauth_authorization_code_crud",
+    "CRUDOAuthRefreshToken",
+    "oauth_refresh_token_crud",
 ]

@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # OAuth 2.1 (used by remote MCP clients like claude.ai web)
+    OAUTH_ISSUER_URL: str = "https://karar-arama-auth-preprod.onedocs.ai"
+    OAUTH_MCP_RESOURCE_URL: str = "https://mcp.onedocs.ai"
+    OAUTH_ACCESS_TOKEN_TTL_SECONDS: int = 3600  # 1 hour
+    OAUTH_REFRESH_TOKEN_TTL_DAYS: int = 30
+    OAUTH_AUTHORIZATION_CODE_TTL_SECONDS: int = 60
+    OAUTH_SESSION_COOKIE_SECRET: str = ""  # itsdangerous signing key; falls back to JWT_SECRET_KEY
+    OAUTH_SESSION_COOKIE_TTL_SECONDS: int = 1800  # 30 min
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
 
