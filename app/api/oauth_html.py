@@ -167,6 +167,12 @@ async def authorize_get(
     resource: str = "",
     db: AsyncSession = Depends(get_db),
 ):
+    # Normalize the resource indicator on the way in. Claude.ai sends
+    # `https://mcp.onedocs.ai/` (trailing slash); we canonicalize to the
+    # slashless form for storage + audience claims so downstream
+    # comparisons are byte-exact.
+    resource = resource.rstrip("/") if resource else ""
+
     # ---- Static validation: anything missing → error page (don't redirect,
     # we can't trust an unverified redirect_uri) ----
     if response_type != "code":
@@ -341,6 +347,10 @@ async def consent_post(
     resource: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
+    # Same normalization as /oauth/authorize — defensive in case the
+    # client form-resubmits with a trailing slash.
+    resource = resource.rstrip("/") if resource else ""
+
     client = await oauth_client_crud.get_by_client_id(db, client_id)
     if client is None or redirect_uri not in client.redirect_uri_list:
         return _error_response(

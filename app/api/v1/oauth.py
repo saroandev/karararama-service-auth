@@ -230,8 +230,10 @@ async def _grant_authorization_code(
             error_description="PKCE verification failed",
         )
 
-    requested_resource = resource or auth_code.resource
-    if requested_resource != auth_code.resource:
+    # Resource indicator (RFC 8707) — same normalization as /oauth/authorize
+    # to handle clients that re-add the trailing slash on this leg of the flow.
+    requested_resource = (resource or auth_code.resource).rstrip("/")
+    if requested_resource != auth_code.resource.rstrip("/"):
         return _oauth_error(
             error="invalid_grant",
             error_description="resource must match the original authorize request",
