@@ -281,20 +281,26 @@ async def login(
             detail="Hesabınız organizasyon ataması bekliyor. Lütfen yönetici ile iletişime geçin."
         )
 
-    # Whitelabel pin (X-Org-Slug). If present, the FE is asserting that
-    # the visitor is logging in via <slug>.onedocs.ai and the token must
-    # be scoped to that org. We resolve the slug, verify membership, and
+    # Whitelabel pin (X-Org-Slug). If present and resolves to a real org,
+    # the FE is asserting that the visitor is logging in via <slug>.onedocs.ai
+    # and the token must be scoped to that org. We verify membership, and
     # switch the user's primary org if needed — same pattern as
     # /switch-organization, just folded into the login transaction.
+    #
+    # If the slug doesn't resolve to any org (e.g. the visitor hit
+    # app.onedocs.ai or any service host like karar-arama-auth-preprod),
+    # we silently fall through to the user's primary org. This lets the FE
+    # blindly forward whatever subdomain it sees without maintaining a
+    # parallel reserved-hosts whitelist — the single source of truth for
+    # "what is a tenant" is the organizations.slug column.
     if x_org_slug:
         normalized_slug = x_org_slug.strip().lower()
         target_org = await organization_crud.get_by_slug(db, slug=normalized_slug)
-        if not target_org or not target_org.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organizasyon bulunamadı",
-            )
-        if str(user.organization_id) != str(target_org.id):
+        if (
+            target_org
+            and target_org.is_active
+            and str(user.organization_id) != str(target_org.id)
+        ):
             membership = await organization_member_crud.get_membership(
                 db,
                 user_id=user.id,
