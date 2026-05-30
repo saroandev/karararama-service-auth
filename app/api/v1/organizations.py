@@ -33,7 +33,7 @@ from app.schemas import (
 from app.api.deps import get_current_active_user, require_permission, require_role
 from app.core.plans import WHITELABEL_PLANS
 from app.core.security import JWTPayload
-from app.core.subdomain import RESERVED_SLUGS, SlugError, slugify, validate_slug
+from app.core.subdomain import SlugError, validate_slug
 from app.services.email import ROLE_DISPLAY_NAMES
 
 router = APIRouter()
@@ -89,24 +89,6 @@ async def get_organization_branding_by_slug(
     return organization
 
 
-async def _resolve_unique_slug(
-    db: AsyncSession, *, base: str
-) -> str:
-    """Find the first free slug of the form base, base-2, base-3, ...
-
-    Used when an org is created without an explicit slug, or when an
-    auto-generated slug collides with an existing one. The suffix is
-    capped so the result stays within 63 chars.
-    """
-    candidate = base
-    suffix = 2
-    while await organization_crud.get_by_slug(db, slug=candidate) is not None:
-        tail = f"-{suffix}"
-        candidate = f"{base[:63 - len(tail)]}{tail}"
-        suffix += 1
-    return candidate
-
-
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 async def create_organization(
     org_in: OrganizationCreate,
@@ -147,9 +129,14 @@ async def create_organization(
             detail="Zaten sahip olduğunuz bir organizasyon var."
         )
 
-    # Resolve whitelabel slug. If the caller provided one, validate strictly
-    # (charset, reserved words, uniqueness). Otherwise derive from the name
-    # and tack on -2/-3/... as needed to dodge collisions.
+    # Whitelabel slug is provisioned at plan upgrade time (see
+    # services/whitelabel.py::ensure_whitelabel_slug), not at org creation.
+    # Free-trial / solo / team orgs intentionally start with slug=NULL so
+    # they don't claim a tenant subdomain they aren't entitled to use.
+    # Callers who *must* set a slug up front (admin tooling, migration
+    # scripts) may still pass one explicitly — we validate and persist it
+    # as-is, regardless of plan.
+    slug = None
     if org_in.slug:
         try:
             requested_slug = validate_slug(org_in.slug.strip().lower())
@@ -164,11 +151,6 @@ async def create_organization(
                 detail="Bu subdomain zaten kullanımda",
             )
         slug = requested_slug
-    else:
-        base = slugify(org_in.name) or "org"
-        if base in RESERVED_SLUGS:
-            base = f"{base}-org"
-        slug = await _resolve_unique_slug(db, base=base)
 
     # Create organization
     organization = Organization(

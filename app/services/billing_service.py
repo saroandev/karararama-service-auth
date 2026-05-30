@@ -258,6 +258,13 @@ async def activate_subscription(
     org.seat_count = payment.seat_count
     org.storage_gb_per_user = payment.storage_gb_per_user
 
+    # If this upgrade puts the org on a whitelabel plan, mint a slug now
+    # so <slug>.onedocs.ai works immediately. No-op for plans that don't
+    # include the feature, and idempotent if the org already has a slug
+    # (e.g. carried over from a previous Elite period before downgrade).
+    from app.services.whitelabel import ensure_whitelabel_slug
+    await ensure_whitelabel_slug(db, org=org)
+
     payment.status = "success"
 
     await db.commit()
