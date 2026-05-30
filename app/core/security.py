@@ -160,6 +160,7 @@ class JWTPayload:
         self.sub: Optional[str] = payload.get("sub")
         self.email: Optional[str] = payload.get("email")
         self.organization_id: Optional[str] = payload.get("organization_id")
+        self.organization_slug: Optional[str] = payload.get("organization_slug")
         self.role: Optional[str] = payload.get("role")
         self.roles: list = payload.get("roles", [])
         self.permissions: list = payload.get("permissions", [])

@@ -53,7 +53,16 @@ class Settings(BaseSettings):
     OAUTH_SESSION_COOKIE_TTL_SECONDS: int = 1800  # 30 min
 
     # CORS
+    # Comma-separated list of exact origin matches (used for dev/local). Any
+    # subdomain of onedocs.ai is allowed unconditionally via CORS_ORIGIN_REGEX
+    # below so whitelabel domains (e.g. ozayhukuk.onedocs.ai) work without
+    # being enumerated here.
     CORS_ORIGINS: str = "http://localhost:3000"
+    # Regex that grants CORS to first-party domains. Matches:
+    #   https://onedocs.ai
+    #   https://<anything>.onedocs.ai  (whitelabel + service subdomains)
+    # No trailing dot, no port — matches what browsers send in the Origin header.
+    CORS_ORIGIN_REGEX: str = r"^https://([a-z0-9-]+\.)*onedocs\.ai$"
 
     # Server
     HOST: str = "0.0.0.0"

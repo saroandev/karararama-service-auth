@@ -15,6 +15,17 @@ from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 class CRUDOrganization(CRUDBase[Organization, OrganizationCreate, OrganizationUpdate]):
     """CRUD operations for Organization model."""
 
+    async def get_by_slug(
+        self,
+        db: AsyncSession,
+        *,
+        slug: str
+    ) -> Optional[Organization]:
+        """Look up an organization by its whitelabel subdomain slug."""
+        stmt = select(Organization).where(Organization.slug == slug)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_by_name(
         self,
         db: AsyncSession,

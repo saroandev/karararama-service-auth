@@ -30,6 +30,14 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "organizations"
 
     name = Column(String(255), nullable=False)
+    # Whitelabel subdomain identifier (e.g. "ozayhukuk" → ozayhukuk.onedocs.ai).
+    # DNS label limit is 63 chars. Validated/normalized at the API boundary via
+    # app.core.subdomain. Nullable while legacy rows backfill; new orgs must set it.
+    slug = Column(String(63), unique=True, nullable=True, index=True)
+    # Whitelabel branding — surfaced by the public by-slug endpoint so the FE
+    # can paint the login page in the org's identity before any auth happens.
+    logo_url = Column(String(500), nullable=True)
+    primary_color = Column(String(7), nullable=True)  # hex "#RRGGBB"
     owner_id = Column(UUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     organization_type = Column(String(50), nullable=True)  # "law-firm", "legal-department", "other"
     organization_size = Column(String(20), nullable=True)  # "1-9", "10-49", "50-200", "200+"

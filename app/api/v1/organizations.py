@@ -17,6 +17,7 @@ from app.crud import organization_crud, user_crud, role_crud, invitation_crud, m
 from app.models import OrganizationMember, User, Organization, Invitation, InvitationStatus, RefreshToken
 from app.models.user import user_roles as user_roles_table
 from app.schemas import (
+    OrganizationBrandingResponse,
     OrganizationCreate,
     OrganizationUpdate,
     OrganizationResponse,
@@ -31,6 +32,7 @@ from app.schemas import (
 )
 from app.api.deps import get_current_active_user, require_permission, require_role
 from app.core.security import JWTPayload
+from app.core.subdomain import RESERVED_SLUGS, SlugError, slugify, validate_slug
 from app.services.email import ROLE_DISPLAY_NAMES
 
 router = APIRouter()
@@ -39,6 +41,61 @@ router = APIRouter()
 class ChangeMemberRoleRequest(BaseModel):
     """Payload for PATCH /organizations/me/members/{email}/role."""
     role: str
+
+
+@router.get(
+    "/by-slug/{slug}",
+    response_model=OrganizationBrandingResponse,
+    summary="Whitelabel branding lookup by subdomain slug",
+)
+async def get_organization_branding_by_slug(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public (no-auth) branding lookup used by the FE on whitelabel domains.
+
+    The FE on `<slug>.onedocs.ai` calls this on boot to paint the login
+    page with the org's logo/color before the visitor authenticates.
+
+    Returns 404 for unknown or inactive organizations. Only branding-safe
+    fields are exposed (see OrganizationBrandingResponse); sensitive fields
+    like owner, plan, member count are deliberately omitted.
+    """
+    # Lowercase + length-cap the lookup key — subdomains are case-insensitive
+    # in DNS, so "OzayHukuk.onedocs.ai" must resolve to the same row.
+    normalized = (slug or "").strip().lower()[:63]
+    if not normalized:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı",
+        )
+
+    organization = await organization_crud.get_by_slug(db, slug=normalized)
+    if not organization or not organization.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organizasyon bulunamadı",
+        )
+
+    return organization
+
+
+async def _resolve_unique_slug(
+    db: AsyncSession, *, base: str
+) -> str:
+    """Find the first free slug of the form base, base-2, base-3, ...
+
+    Used when an org is created without an explicit slug, or when an
+    auto-generated slug collides with an existing one. The suffix is
+    capped so the result stays within 63 chars.
+    """
+    candidate = base
+    suffix = 2
+    while await organization_crud.get_by_slug(db, slug=candidate) is not None:
+        tail = f"-{suffix}"
+        candidate = f"{base[:63 - len(tail)]}{tail}"
+        suffix += 1
+    return candidate
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
@@ -81,9 +138,33 @@ async def create_organization(
             detail="Zaten sahip olduğunuz bir organizasyon var."
         )
 
+    # Resolve whitelabel slug. If the caller provided one, validate strictly
+    # (charset, reserved words, uniqueness). Otherwise derive from the name
+    # and tack on -2/-3/... as needed to dodge collisions.
+    if org_in.slug:
+        try:
+            requested_slug = validate_slug(org_in.slug.strip().lower())
+        except SlugError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            )
+        if await organization_crud.get_by_slug(db, slug=requested_slug):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Bu subdomain zaten kullanımda",
+            )
+        slug = requested_slug
+    else:
+        base = slugify(org_in.name) or "org"
+        if base in RESERVED_SLUGS:
+            base = f"{base}-org"
+        slug = await _resolve_unique_slug(db, base=base)
+
     # Create organization
     organization = Organization(
         name=org_in.name,
+        slug=slug,
         owner_id=user.id,
         organization_type=org_in.organization_type,
         organization_size=org_in.organization_size,
@@ -878,6 +959,26 @@ async def update_organization(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Sadece organizasyon sahibi veya admin güncelleyebilir"
         )
+
+    # Slug change is destructive (rotates the whitelabel URL); validate as
+    # strictly here as we do at create time. Skip validation when slug is
+    # unchanged so PUTs that just touch name/logo don't trip on legacy
+    # rows that haven't been backfilled yet.
+    if org_in.slug is not None and org_in.slug != organization.slug:
+        try:
+            new_slug = validate_slug(org_in.slug.strip().lower())
+        except SlugError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            )
+        existing = await organization_crud.get_by_slug(db, slug=new_slug)
+        if existing and existing.id != organization.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Bu subdomain zaten kullanımda",
+            )
+        org_in.slug = new_slug
 
     updated_org = await organization_crud.update(db, db_obj=organization, obj_in=org_in)
     return updated_org

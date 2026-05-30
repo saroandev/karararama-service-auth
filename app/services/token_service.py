@@ -129,9 +129,15 @@ async def build_user_token_payload(
     )
     plan_expires_at_iso = org_plan_expires_at.isoformat() if org_plan_expires_at else None
 
+    # Whitelabel slug of the active org — surfaced as a JWT claim so the FE
+    # can verify token-vs-subdomain match without an extra round trip
+    # (and so other services see which whitelabel context the token came from).
+    org_slug = user.organization.slug if user.organization is not None else None
+
     return {
         "sub": str(user.id),
         "organization_id": str(user.organization_id) if user.organization_id else None,
+        "organization_slug": org_slug,
         "email": user.email,
         "role": primary_role,
         "roles": roles,

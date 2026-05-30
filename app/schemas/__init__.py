@@ -45,6 +45,7 @@ from app.schemas.usage import (
 )
 from app.schemas.organization import (
     OrganizationBase,
+    OrganizationBrandingResponse,
     OrganizationCreate,
     OrganizationUpdate,
     OrganizationResponse,
@@ -149,6 +150,7 @@ __all__ = [
     "UsageLogResponse",
     # Organization
     "OrganizationBase",
+    "OrganizationBrandingResponse",
     "OrganizationCreate",
     "OrganizationUpdate",
     "OrganizationResponse",

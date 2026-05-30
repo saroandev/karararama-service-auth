@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import random
 import string
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -211,20 +211,34 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     login_data: LoginRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_org_slug: str | None = Header(default=None, alias="X-Org-Slug"),
 ) -> TokenResponse:
     """
     Login with email and password.
 
+    Optional `X-Org-Slug` header pins this login to a whitelabel
+    subdomain. When the request comes from `<slug>.onedocs.ai`, the FE
+    sends the slug so we can:
+      1. Reject users who try to sign in to a tenant they don't belong to
+         (prevents Org A's link being used by Org B's customer).
+      2. Switch the user's primary organization to the target tenant on
+         success, so the issued token is scoped to the right context.
+
+    When the header is absent (e.g. legacy login from app.onedocs.ai), the
+    flow is unchanged: token is issued for the user's existing primary org.
+
     Args:
         login_data: Login credentials
         db: Database session
+        x_org_slug: Optional whitelabel subdomain pin (from FE)
 
     Returns:
         Access and refresh tokens
 
     Raises:
-        HTTPException: If credentials are invalid
+        HTTPException: If credentials are invalid, or X-Org-Slug points
+            at an unknown/inactive org or one the user has no membership in.
     """
     # Authenticate user
     user = await user_crud.authenticate(
@@ -266,6 +280,39 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Hesabınız organizasyon ataması bekliyor. Lütfen yönetici ile iletişime geçin."
         )
+
+    # Whitelabel pin (X-Org-Slug). If present, the FE is asserting that
+    # the visitor is logging in via <slug>.onedocs.ai and the token must
+    # be scoped to that org. We resolve the slug, verify membership, and
+    # switch the user's primary org if needed — same pattern as
+    # /switch-organization, just folded into the login transaction.
+    if x_org_slug:
+        normalized_slug = x_org_slug.strip().lower()
+        target_org = await organization_crud.get_by_slug(db, slug=normalized_slug)
+        if not target_org or not target_org.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organizasyon bulunamadı",
+            )
+        if str(user.organization_id) != str(target_org.id):
+            membership = await organization_member_crud.get_membership(
+                db,
+                user_id=user.id,
+                organization_id=target_org.id,
+            )
+            if not membership:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bu organizasyonda hesabınız yok",
+                )
+            await organization_member_crud.set_primary(
+                db,
+                user_id=user.id,
+                organization_id=target_org.id,
+            )
+            # Reload so user.organization_id + user.organization reflect the
+            # new active org before we build the token payload below.
+            user = await user_crud.get_with_roles(db, id=user.id)
 
     # Update last login
     await user_crud.update_last_login(db, user=user)

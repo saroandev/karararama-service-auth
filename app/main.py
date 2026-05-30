@@ -22,10 +22,13 @@ app = FastAPI(
     openapi_url="/openapi.json"
 )
 
-# CORS middleware
+# CORS middleware. `allow_origin_regex` covers the *.onedocs.ai whitelabel
+# fleet (and onedocs.ai itself) so we don't have to enumerate every tenant
+# subdomain; `allow_origins` keeps localhost/dev origins from .env working.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
