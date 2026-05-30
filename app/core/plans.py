@@ -69,6 +69,13 @@ BILLING_CYCLES = {
 # Plans that count as paid (post-trial)
 PAID_PLANS = {"solo", "team", "elite", "enterprise"}
 
+# Plans that include the whitelabel subdomain feature (<slug>.onedocs.ai).
+# Organizations on other plans technically have a slug column (assigned at
+# create time / via migration backfill) but it is intentionally not
+# addressable: the by-slug branding endpoint returns 404 and the login
+# X-Org-Slug pin is treated as a no-op. Upgrade to Elite to unlock.
+WHITELABEL_PLANS = {"elite", "enterprise"}
+
 # Plan states
 PLAN_FREE_TRIAL = "free_trial"
 PLAN_EXPIRED_TRIAL = "expired_trial"

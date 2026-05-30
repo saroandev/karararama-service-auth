@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.plans import WHITELABEL_PLANS
 from app.core.security import jwt_handler
 from app.core.permissions import get_data_access_for_user, calculate_remaining_credits
 from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud, password_reset, organization_member_crud
@@ -296,9 +297,15 @@ async def login(
     if x_org_slug:
         normalized_slug = x_org_slug.strip().lower()
         target_org = await organization_crud.get_by_slug(db, slug=normalized_slug)
+        # Whitelabel pin is only honored for orgs on plans that include
+        # the feature (Elite/Enterprise). Any other plan — even if the
+        # slug resolves — is treated like an unknown slug: silent
+        # fallthrough to the user's primary org, no membership 403.
+        # Same effect as the user hitting app.onedocs.ai directly.
         if (
             target_org
             and target_org.is_active
+            and target_org.plan in WHITELABEL_PLANS
             and str(user.organization_id) != str(target_org.id)
         ):
             membership = await organization_member_crud.get_membership(

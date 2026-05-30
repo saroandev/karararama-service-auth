@@ -31,6 +31,7 @@ from app.schemas import (
     MuvekkillResponse,
 )
 from app.api.deps import get_current_active_user, require_permission, require_role
+from app.core.plans import WHITELABEL_PLANS
 from app.core.security import JWTPayload
 from app.core.subdomain import RESERVED_SLUGS, SlugError, slugify, validate_slug
 from app.services.email import ROLE_DISPLAY_NAMES
@@ -71,7 +72,15 @@ async def get_organization_branding_by_slug(
         )
 
     organization = await organization_crud.get_by_slug(db, slug=normalized)
-    if not organization or not organization.is_active:
+    # Whitelabel subdomain is an Elite/Enterprise feature. Organizations on
+    # lower tiers still have a slug column for identification (assigned by
+    # migration backfill), but it is intentionally unaddressable — return
+    # 404 so the FE falls back to canonical app.onedocs.ai branding.
+    if (
+        not organization
+        or not organization.is_active
+        or organization.plan not in WHITELABEL_PLANS
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organizasyon bulunamadı",
