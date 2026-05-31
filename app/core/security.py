@@ -166,6 +166,9 @@ class JWTPayload:
         self.permissions: list = payload.get("permissions", [])
         self.data_access: Dict[str, Any] = payload.get("data_access", {})
         self.organizations: list = payload.get("organizations", [])
+        self.portals: list = payload.get("portals", [])
+        self.active_portal_id: Optional[str] = payload.get("active_portal_id")
+        self.user_type: Optional[str] = payload.get("user_type")
         self.plan: Optional[str] = payload.get("plan")
 
     def has_permission(self, resource: str, action: str) -> bool:

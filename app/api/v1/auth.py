@@ -4,8 +4,10 @@ Authentication endpoints: login, register, refresh token.
 from datetime import datetime, timedelta
 import random
 import string
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -675,6 +677,75 @@ async def switch_organization(
         access_token=new_access_token,
         refresh_token=new_refresh_token,
         token_type="bearer"
+    )
+
+
+class SwitchPortalRequest(BaseModel):
+    """Body for POST /auth/switch-portal."""
+    portal_id: UUID
+
+
+@router.post("/switch-portal", response_model=TokenResponse)
+async def switch_portal(
+    request: SwitchPortalRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> TokenResponse:
+    """Switch the caller's active portal context and rotate their JWT.
+
+    Mirrors switch-organization: verifies portal membership, persists
+    the choice on users.active_portal_id, blacklists the old token,
+    revokes refresh tokens, and issues a new pair with the new portal
+    pinned in the JWT.
+    """
+    from app.crud import portal_member_crud
+
+    membership = await portal_member_crud.get_membership(
+        db, muvekkil_id=request.portal_id, user_id=current_user.id
+    )
+    if membership is None or not membership.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu portala erişim yetkiniz yok",
+        )
+
+    old_access_token = credentials.credentials
+    try:
+        old_payload = jwt_handler.decode_token(old_access_token)
+        old_expires_at = datetime.fromtimestamp(old_payload.get("exp"))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token"
+        )
+
+    await blacklisted_token_crud.add_to_blacklist(
+        db=db,
+        token=old_access_token,
+        user_id=current_user.id,
+        expires_at=old_expires_at,
+        reason="portal_switch",
+    )
+    await refresh_token_crud.revoke_all_user_tokens(db, current_user.id)
+
+    # Persist the choice so the next login defaults to the same portal.
+    current_user.active_portal_id = request.portal_id
+    db.add(current_user)
+    await db.flush()
+
+    user = await user_crud.get_with_roles(db, id=current_user.id)
+    token_data = await build_user_token_payload(db, user)
+    new_access_token = jwt_handler.create_access_token(token_data)
+    new_refresh_token = jwt_handler.create_refresh_token({"sub": str(user.id)})
+    await refresh_token_crud.create(
+        db=db, user_id=user.id, token=new_refresh_token, device_info=None
+    )
+    await db.commit()
+
+    return TokenResponse(
+        access_token=new_access_token,
+        refresh_token=new_refresh_token,
+        token_type="bearer",
     )
 
 

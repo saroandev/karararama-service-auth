@@ -535,3 +535,48 @@ async def send_invitation_email(
             logger.warning("⚠️  Email sending failed but invitation details logged to console (dev mode)")
             return True  # Consider success in dev mode since details are visible in console
         return False
+
+
+async def send_otp_email(
+    email: str,
+    code: str,
+    organization_name: str | None = None,
+) -> bool:
+    """Send a 6-digit OTP login code.
+
+    Falls back to OneDocs branding if no organization_name is given (e.g.
+    OTP requested from the apex domain). Whitelabel callers should pass
+    the host org name so the email reads like it comes from the firm.
+    Code is never logged in production — only in dev mode (ENABLE_CONSOLE_LOG).
+    """
+    brand = organization_name or "OneDocs"
+    try:
+        if ENABLE_CONSOLE_LOG:
+            print(f"\n{'=' * 60}")
+            print("🔐 OTP LOGIN CODE (Development Mode)")
+            print(f"   To:    {email}")
+            print(f"   Code:  {code}")
+            print(f"   Brand: {brand}")
+            print(f"   Valid: 60 minutes")
+            print(f"{'=' * 60}\n")
+
+        subject = f"{brand} - Giriş kodunuz: {code}"
+        html_body = f"""<!DOCTYPE html>
+<html><body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width:560px; margin:auto; padding:24px;">
+  <h2 style="color:#1a1a2e;">{brand}'a giriş</h2>
+  <p>Aşağıdaki 6 haneli kodu giriş ekranına yazarak oturum açabilirsin.</p>
+  <p style="font-size:32px; font-weight:700; letter-spacing:6px; background:#f5f7fb; padding:16px 24px; border-radius:8px; display:inline-block; color:#1a1a2e;">{code}</p>
+  <p style="color:#666; font-size:13px; margin-top:24px;">
+    Bu kod 60 dakika içinde geçerli. Bu girişi sen başlatmadıysan e-postayı yok sayabilirsin.
+  </p>
+</body></html>"""
+
+        ok = await send_email(to=email, subject=subject, html_body=html_body)
+        if ok:
+            logger.info(f"✅ OTP login email sent to {email}")
+        return ok
+    except Exception as exc:
+        logger.error(f"❌ Failed to send OTP email to {email}: {exc}")
+        if ENABLE_CONSOLE_LOG:
+            return True
+        return False

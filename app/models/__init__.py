@@ -17,6 +17,7 @@ from app.models.organization_member import OrganizationMember
 from app.models.password_reset import PasswordResetToken
 from app.models.muvekkil import Muvekkil, MuvekkilUnvan
 from app.models.portal_member import PortalMember, PortalRole
+from app.models.otp_code import OtpCode
 from app.models.iliskili_muvekkil import IliskiliMuvekkil
 from app.models.department import Department
 from app.models.payment import Payment
@@ -46,6 +47,7 @@ __all__ = [
     "MuvekkilUnvan",
     "PortalMember",
     "PortalRole",
+    "OtpCode",
     "IliskiliMuvekkil",
     "Department",
     "Payment",

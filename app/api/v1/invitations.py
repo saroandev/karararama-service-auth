@@ -1,6 +1,7 @@
 """
 Invitation management endpoints.
 """
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,12 +10,69 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.crud import invitation_crud, user_crud, role_crud
-from app.models import User, Invitation
+from app.crud import invitation_crud, portal_member_crud, user_crud, role_crud
+from app.models import User, Invitation, PortalRole
 from app.schemas import InvitationPublicResponse
 from app.models.invitation import InvitationStatus
 
 router = APIRouter()
+
+
+async def _accept_portal_invitation(
+    db: AsyncSession, *, invitation: Invitation
+) -> InvitationPublicResponse:
+    """Handle a portal-scoped invitation: provision a Guest user if the
+    email is new, then attach to portal_members. Org membership is not
+    touched — portal access alone is the whole point of these invites."""
+    from app.api.v1.guest_auth import (
+        generate_guest_user_password,
+        hash_guest_password,
+    )
+
+    user = await user_crud.get_by_email(db, email=invitation.email)
+    if user is None:
+        # Provision a Guest user. password_hash is a random unguessable
+        # value because the User row needs one (NOT NULL) but login is
+        # OTP-only for user_type='guest'.
+        plain = generate_guest_user_password()
+        user = User(
+            email=invitation.email,
+            password_hash=hash_guest_password(plain),
+            first_name="",
+            last_name="",
+            is_active=True,
+            is_verified=True,
+            user_type="guest",
+        )
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+
+    portal_role = (
+        invitation.portal_role or PortalRole.GUEST.value
+    )
+    await portal_member_crud.create(
+        db,
+        muvekkil_id=invitation.muvekkil_id,
+        user_id=user.id,
+        portal_role=portal_role,
+        invited_by_user_id=invitation.invited_by_user_id,
+    )
+
+    await invitation_crud.mark_accepted(db, invitation=invitation)
+    await db.commit()
+    await db.refresh(invitation)
+
+    return InvitationPublicResponse(
+        email=invitation.email,
+        organization_id=invitation.organization_id,
+        role=invitation.role,
+        status=InvitationStatus.ACCEPTED,
+        expires_at=invitation.expires_at,
+        muvekkil_id=invitation.muvekkil_id,
+        portal_role=portal_role,
+        is_portal_invite=True,
+    )
 
 
 @router.get("/accept/{token}", response_model=InvitationPublicResponse)
@@ -75,6 +133,11 @@ async def accept_invitation(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Geçersiz davet durumu"
             )
+
+    # Portal-scoped invitation: a different control flow — Guest user
+    # provisioning + portal_members row. Org membership is untouched.
+    if invitation.is_portal_invite:
+        return await _accept_portal_invitation(db, invitation=invitation)
 
     # Check if user with this email already exists
     user = await user_crud.get_by_email(db, email=invitation.email)

@@ -3,11 +3,12 @@ API v1 router.
 """
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, admin, usage, organizations, uets_accounts, uets_extension, uyap_accounts, uyap_extension, invitations, muvekkiller, portal_members, departments, iliskili_muvekkiller, roles, billing, mcp, oauth
+from app.api.v1 import auth, users, admin, usage, organizations, uets_accounts, uets_extension, uyap_accounts, uyap_extension, invitations, muvekkiller, portal_members, departments, iliskili_muvekkiller, roles, billing, mcp, oauth, guest_auth
 
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(guest_auth.router, prefix="/auth/guest", tags=["guest auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(usage.router, prefix="/usage", tags=["usage"])

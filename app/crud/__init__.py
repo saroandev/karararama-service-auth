@@ -15,6 +15,7 @@ from app.crud.organization_member import CRUDOrganizationMember, organization_me
 from app.crud import email_verification
 from app.crud.muvekkil import CRUDMuvekkil, muvekkil_crud
 from app.crud.portal_member import CRUDPortalMember, portal_member_crud
+from app.crud.otp_code import CRUDOtpCode, otp_code_crud
 from app.crud.iliskili_muvekkil import CRUDIliskiliMuvekkil, iliskili_muvekkil_crud
 from app.crud.department import CRUDDepartment, department_crud
 from app.crud.mcp_api_key import CRUDMcpApiKey, mcp_api_key_crud
@@ -56,6 +57,8 @@ __all__ = [
     "muvekkil_crud",
     "CRUDPortalMember",
     "portal_member_crud",
+    "CRUDOtpCode",
+    "otp_code_crud",
     "CRUDIliskiliMuvekkil",
     "iliskili_muvekkil_crud",
     "CRUDDepartment",

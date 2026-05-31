@@ -11,7 +11,7 @@ from app.core.permissions import (
     calculate_remaining_credits,
     get_data_access_for_user,
 )
-from app.crud import organization_member_crud, usage_crud
+from app.crud import organization_member_crud, portal_member_crud, usage_crud
 from app.models import Role, User
 from app.models.user import user_roles
 
@@ -106,6 +106,35 @@ async def build_user_token_payload(
         for membership in memberships
     ]
 
+    # Portal context for Guest user / multi-portal flows. The JWT carries
+    # the list of active portal memberships so the FE can render the
+    # post-login portal selector (spec §6) without a follow-up call, plus
+    # an active_portal_id hint that defaults to the user's stored choice
+    # (or the most recently joined when no explicit choice has been made).
+    portal_memberships = await portal_member_crud.list_active_by_user(
+        db, user_id=user.id
+    )
+    portals_claim = [
+        {
+            "id": str(pm.muvekkil.id),
+            "name": pm.muvekkil.full_name,
+            "portal_role": pm.portal_role,
+            "organization_id": str(pm.muvekkil.organization_id),
+        }
+        for pm in portal_memberships
+    ]
+    active_portal_id = None
+    if user.active_portal_id is not None and any(
+        str(pm.muvekkil.id) == str(user.active_portal_id) for pm in portal_memberships
+    ):
+        active_portal_id = str(user.active_portal_id)
+    elif portal_memberships:
+        # Most recently joined active portal wins as the default — close
+        # enough to "last used" until we wire a real last_seen column.
+        active_portal_id = str(
+            max(portal_memberships, key=lambda pm: pm.joined_at).muvekkil.id
+        )
+
     # Plan now lives on the organization (Solo/Team/Elite/Enterprise). For
     # legacy compatibility we fall back to user.plan when no org plan exists.
     org_plan = None
@@ -150,6 +179,9 @@ async def build_user_token_payload(
             "daily_document_limit": user.daily_document_upload_limit,
         },
         "organizations": organizations,
+        "portals": portals_claim,
+        "active_portal_id": active_portal_id,
+        "user_type": getattr(user, "user_type", "organization_member"),
         "plan": plan,
         "plan_expires_at": plan_expires_at_iso,
         "trial_ends_at": trial_ends_at_iso,

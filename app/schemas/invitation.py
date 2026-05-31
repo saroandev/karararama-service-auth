@@ -55,6 +55,11 @@ class InvitationPublicResponse(BaseModel):
     role: str
     status: InvitationStatus
     expires_at: datetime
+    # Set only for portal-scoped invitations — lets the FE redirect to
+    # the portal context post-accept instead of the default org dashboard.
+    muvekkil_id: Optional[UUID] = None
+    portal_role: Optional[str] = None
+    is_portal_invite: bool = False
 
     class Config:
         from_attributes = True
