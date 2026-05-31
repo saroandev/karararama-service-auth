@@ -1007,7 +1007,7 @@ async def get_organization_muvekkiller(
                     detail="Bu organizasyonun müvekkillerine erişim reddedildi"
                 )
 
-    muvekkiller = await muvekkil_crud.get_by_organization(
+    muvekkiller = await muvekkil_crud.list_by_organization(
         db,
         organization_id=organization_id,
         skip=skip,

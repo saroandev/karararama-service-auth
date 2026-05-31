@@ -94,7 +94,7 @@ from app.schemas.muvekkil import (
     MuvekkillCreate,
     MuvekkillUpdate,
     MuvekkillResponse,
-    MuvekkillWithOrganizations,
+    MuvekkillListResponse,
 )
 from app.schemas.iliskili_muvekkil import (
     IliskiliMuvekkillBase,
@@ -190,7 +190,7 @@ __all__ = [
     "MuvekkillCreate",
     "MuvekkillUpdate",
     "MuvekkillResponse",
-    "MuvekkillWithOrganizations",
+    "MuvekkillListResponse",
     # Iliskili Muvekkil
     "IliskiliMuvekkillBase",
     "IliskiliMuvekkillCreate",

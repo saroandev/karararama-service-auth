@@ -1,167 +1,188 @@
 """
-Muvekkiller (Clients) management endpoints.
+Muvekkiller (Portals) management endpoints.
+
+A muvekkil = a Portal. Belongs to exactly one organization and lives
+inside the caller's active org's data — there is no cross-org muvekkil
+access (except superuser).
 """
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_active_user
 from app.core.database import get_db
-from app.crud import muvekkil_crud, organization_crud
+from app.crud import muvekkil_crud
 from app.crud.iliskili_muvekkil import iliskili_muvekkil_crud
-from app.models import User
+from app.models import Muvekkil, MuvekkilUnvan, User
 from app.schemas import (
     MuvekkillCreate,
-    MuvekkillUpdate,
+    MuvekkillListResponse,
     MuvekkillResponse,
-    MuvekkillWithOrganizations,
-    OrganizationResponse,
+    MuvekkillUpdate,
 )
-from app.schemas.muvekkil import MuvekkillListResponse
 from app.schemas.iliskili_muvekkil import IliskiliMuvekkillResponse
-from app.api.deps import get_current_active_user
 
 router = APIRouter()
 
 
-@router.post("/", response_model=MuvekkillWithOrganizations, status_code=status.HTTP_201_CREATED)
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_superuser(user: User) -> bool:
+    return any(role.name.lower() == "superuser" for role in user.roles)
+
+
+def _require_active_organization(user: User) -> UUID:
+    if not user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aktif bir organizasyonunuz yok",
+        )
+    return user.organization_id
+
+
+async def _get_portal_or_404(
+    db: AsyncSession, *, muvekkil_id: UUID, current_user: User
+) -> Muvekkil:
+    """Fetch the muvekkil and enforce that the caller can see it.
+
+    Superuser sees everything; other users see only their own org's
+    muvekkiller. Returns the resolved row; raises 404 (not 403) when
+    the muvekkil is outside the caller's org so callers can't probe
+    other orgs' UUIDs.
+    """
+    muvekkil = await muvekkil_crud.get(db, id=muvekkil_id)
+    if not muvekkil:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Müvekkil bulunamadı"
+        )
+    if _is_superuser(current_user):
+        return muvekkil
+    org_id = _require_active_organization(current_user)
+    if muvekkil.organization_id != org_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Müvekkil bulunamadı"
+        )
+    return muvekkil
+
+
+async def _check_identity_duplicates(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    tckn: Optional[str],
+    vkn: Optional[str],
+    email: Optional[str],
+    exclude_muvekkil_id: Optional[UUID] = None,
+) -> None:
+    if tckn and await muvekkil_crud.tckn_taken(
+        db,
+        organization_id=organization_id,
+        tckn=tckn,
+        exclude_muvekkil_id=exclude_muvekkil_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu TCKN ile kayıtlı başka bir müvekkil var",
+        )
+    if vkn and await muvekkil_crud.vkn_taken(
+        db,
+        organization_id=organization_id,
+        vkn=vkn,
+        exclude_muvekkil_id=exclude_muvekkil_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu VKN ile kayıtlı başka bir müvekkil var",
+        )
+    if email and await muvekkil_crud.email_taken_in_organization(
+        db,
+        organization_id=organization_id,
+        email=email,
+        exclude_muvekkil_id=exclude_muvekkil_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı",
+        )
+
+
+# ---------------------------------------------------------------------------
+# CRUD
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/", response_model=MuvekkillResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_muvekkil(
     muvekkil_in: MuvekkillCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
+    """Create a new portal pinned to the caller's active organization.
+
+    organization_id is implicit — there is no cross-org portal create
+    (Superusers can still do it via DB or future admin tooling, but the
+    user-facing endpoint enforces self-org isolation).
     """
-    Create new muvekkil and attach it to the caller's organization (admin only).
-
-    - Admin: müvekkil her zaman admin'in kendi organizasyonuna bağlanır; body'de
-      organization_id verilirse admin'in org'u ile aynı olmalıdır.
-    - Superuser: body'de organization_id zorunludur; verilen organizasyona bağlanır.
-
-    Raises:
-        HTTPException: If email already exists or organization is invalid.
-    """
-    user_roles = [role.name.lower() for role in current_user.roles]
-    is_superuser = "superuser" in user_roles
-
-    if is_superuser:
-        if not muvekkil_in.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Superuser müvekkil oluştururken organization_id zorunludur"
-            )
-        target_org_id = muvekkil_in.organization_id
-    else:
-        if not current_user.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Organizasyonunuz tanımlı değil"
-            )
-        if (
-            muvekkil_in.organization_id
-            and muvekkil_in.organization_id != current_user.organization_id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Sadece kendi organizasyonunuza müvekkil ekleyebilirsiniz"
-            )
-        target_org_id = current_user.organization_id
-
-    organization = await organization_crud.get(db, id=target_org_id)
-    if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organizasyon bulunamadı"
-        )
-
-    # Email uniqueness is scoped to the target organization
-    if muvekkil_in.email:
-        already_used = await muvekkil_crud.email_exists_in_organizations(
-            db,
-            email=muvekkil_in.email,
-            organization_ids=[target_org_id],
-        )
-        if already_used:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı"
-            )
-
-    muvekkil = await muvekkil_crud.create(
-        db, obj_in=muvekkil_in, organization=organization
+    organization_id = _require_active_organization(current_user)
+    await _check_identity_duplicates(
+        db,
+        organization_id=organization_id,
+        tckn=muvekkil_in.tckn,
+        vkn=muvekkil_in.vkn,
+        email=muvekkil_in.email,
     )
+    muvekkil = await muvekkil_crud.create_for_organization(
+        db, obj_in=muvekkil_in, organization_id=organization_id
+    )
+    await db.commit()
+    await db.refresh(muvekkil)
     return muvekkil
 
 
 @router.get("/", response_model=MuvekkillListResponse)
 async def list_muvekkiller(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=500),
+    search: Optional[str] = Query(None, description="Ad/soyad/email/TCKN/VKN'de arama"),
+    include_archived: bool = Query(False, description="Arşivlenmişleri de göster"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
-    """
-    List muvekkiller.
-
-    Superuser can see all muvekkiller.
-    Other authenticated users see muvekkiller from their active organization.
-    """
-    user_roles = [role.name.lower() for role in current_user.roles]
-
-    if "superuser" in user_roles:
-        muvekkiller = await muvekkil_crud.get_multi(db, skip=skip, limit=limit)
-        total = await muvekkil_crud.count_all(db)
-    else:
-        if not current_user.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Organizasyonunuz tanımlı değil"
-            )
-
-        muvekkiller = await muvekkil_crud.get_by_organization(
-            db,
-            organization_id=current_user.organization_id,
-            skip=skip,
-            limit=limit
-        )
-        total = await muvekkil_crud.count_by_organization(
-            db, organization_id=current_user.organization_id
-        )
-
-    return MuvekkillListResponse(total=total, items=muvekkiller)
+    """List portals in the caller's active organization."""
+    organization_id = _require_active_organization(current_user)
+    items = await muvekkil_crud.list_by_organization(
+        db,
+        organization_id=organization_id,
+        skip=skip,
+        limit=limit,
+        search=search,
+        include_archived=include_archived,
+    )
+    total = await muvekkil_crud.count_by_organization(
+        db,
+        organization_id=organization_id,
+        search=search,
+        include_archived=include_archived,
+    )
+    return MuvekkillListResponse(total=total, items=items)
 
 
-@router.get("/{muvekkil_id}", response_model=MuvekkillWithOrganizations)
+@router.get("/{muvekkil_id}", response_model=MuvekkillResponse)
 async def get_muvekkil(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
-    """
-    Get muvekkil by ID with organizations (admin only).
-
-    Superuser can see any muvekkil.
-    Admin can only see muvekkiller from their organization.
-    """
-    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı"
-        )
-
-    # Check if user has access to this muvekkil
-    user_roles = [role.name.lower() for role in current_user.roles]
-    if "superuser" not in user_roles:
-        # Admin can only access muvekkiller from their organization
-        org_ids = [org.id for org in muvekkil.organizations]
-        if current_user.organization_id not in org_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Bu müvekkile erişim yetkiniz yok"
-            )
-
-    return muvekkil
+    return await _get_portal_or_404(
+        db, muvekkil_id=muvekkil_id, current_user=current_user
+    )
 
 
 @router.put("/{muvekkil_id}", response_model=MuvekkillResponse)
@@ -169,218 +190,106 @@ async def update_muvekkil(
     muvekkil_id: UUID,
     muvekkil_in: MuvekkillUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
-    """
-    Update muvekkil (admin only).
+    """Patch portal fields. The PUT verb here is historical — only the
+    fields present in the body are updated (matches MuvekkillUpdate's
+    all-optional shape)."""
+    muvekkil = await _get_portal_or_404(
+        db, muvekkil_id=muvekkil_id, current_user=current_user
+    )
 
-    Superuser can update any muvekkil.
-    Admin can only update muvekkiller from their organization.
-    """
-    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
-    if not muvekkil:
+    # Resolve the post-update view of (unvan, tckn, vkn) so we can both
+    # enforce the type invariant and run duplicate checks against the
+    # final state, not stale values.
+    new_unvan = muvekkil_in.unvan or muvekkil.unvan
+    new_tckn = muvekkil_in.tckn if "tckn" in muvekkil_in.model_fields_set else muvekkil.tckn
+    new_vkn = muvekkil_in.vkn if "vkn" in muvekkil_in.model_fields_set else muvekkil.vkn
+    if new_unvan == MuvekkilUnvan.KISI and new_vkn:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Gerçek kişi müvekkilde VKN olamaz",
+        )
+    if new_unvan == MuvekkilUnvan.SIRKET and new_tckn:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tüzel kişi müvekkilde TCKN olamaz",
         )
 
-    # Check if user has access to this muvekkil
-    user_roles = [role.name.lower() for role in current_user.roles]
-    if "superuser" not in user_roles:
-        # Admin can only update muvekkiller from their organization
-        org_ids = [org.id for org in muvekkil.organizations]
-        if current_user.organization_id not in org_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Bu müvekkili güncelleme yetkiniz yok"
-            )
+    await _check_identity_duplicates(
+        db,
+        organization_id=muvekkil.organization_id,
+        tckn=new_tckn,
+        vkn=new_vkn,
+        email=muvekkil_in.email
+        if "email" in muvekkil_in.model_fields_set
+        else None,
+        exclude_muvekkil_id=muvekkil.id,
+    )
 
-    # Email uniqueness is scoped to the muvekkil's organizations
-    if muvekkil_in.email and muvekkil_in.email != muvekkil.email:
-        already_used = await muvekkil_crud.email_exists_in_organizations(
-            db,
-            email=muvekkil_in.email,
-            organization_ids=[org.id for org in muvekkil.organizations],
-            exclude_muvekkil_id=muvekkil.id,
-        )
-        if already_used:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı"
-            )
-
-    updated = await muvekkil_crud.update(db, db_obj=muvekkil, obj_in=muvekkil_in)
-    return updated
+    payload = muvekkil_in.model_dump(exclude_unset=True)
+    for field, value in payload.items():
+        setattr(muvekkil, field, value)
+    db.add(muvekkil)
+    await db.commit()
+    await db.refresh(muvekkil)
+    return muvekkil
 
 
 @router.delete("/{muvekkil_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_muvekkil(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
-    """
-    Delete muvekkil (admin only).
-
-    Superuser can delete any muvekkil.
-    Admin can only delete muvekkiller from their organization.
-    """
-    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı"
-        )
-
-    # Check if user has access to this muvekkil
-    user_roles = [role.name.lower() for role in current_user.roles]
-    if "superuser" not in user_roles:
-        # Admin can only delete muvekkiller from their organization
-        org_ids = [org.id for org in muvekkil.organizations]
-        if current_user.organization_id not in org_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Bu müvekkili silme yetkiniz yok"
-            )
-
-    await muvekkil_crud.delete(db, id=muvekkil_id)
-
-
-@router.post(
-    "/{muvekkil_id}/organizations/{organization_id}",
-    response_model=MuvekkillWithOrganizations
-)
-async def add_organization_to_muvekkil(
-    muvekkil_id: UUID,
-    organization_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Add organization to muvekkil (admin only).
-
-    Raises:
-        HTTPException: If muvekkil or organization not found
-    """
-    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı"
-        )
-
-    organization = await organization_crud.get(db, id=organization_id)
-    if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organizasyon bulunamadı"
-        )
-
-    # Check if admin can manage this organization
-    user_roles = [role.name.lower() for role in current_user.roles]
-    if "superuser" not in user_roles:
-        # Regular admin can only add to their own organization
-        if str(current_user.organization_id) != str(organization_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Sadece kendi organizasyonunuza müvekkil ekleyebilirsiniz"
-            )
-
-    updated = await muvekkil_crud.add_organization(
-        db,
-        muvekkil=muvekkil,
-        organization=organization
+    """Hard-delete a portal. Cascades drop portal_members and iliskili
+    rows via ON DELETE CASCADE. Prefer the archive endpoint for soft
+    delete in most flows."""
+    muvekkil = await _get_portal_or_404(
+        db, muvekkil_id=muvekkil_id, current_user=current_user
     )
-    return updated
+    await db.delete(muvekkil)
+    await db.commit()
 
 
-@router.delete(
-    "/{muvekkil_id}/organizations/{organization_id}",
-    response_model=MuvekkillWithOrganizations
-)
-async def remove_organization_from_muvekkil(
+@router.post("/{muvekkil_id}/archive", response_model=MuvekkillResponse)
+async def archive_muvekkil(
     muvekkil_id: UUID,
-    organization_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
-    """
-    Remove organization from muvekkil (admin only).
-
-    Raises:
-        HTTPException: If muvekkil or organization not found
-    """
-    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı"
-        )
-
-    organization = await organization_crud.get(db, id=organization_id)
-    if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organizasyon bulunamadı"
-        )
-
-    # Check if admin can manage this organization
-    user_roles = [role.name.lower() for role in current_user.roles]
-    if "superuser" not in user_roles:
-        # Regular admin can only remove from their own organization
-        if str(current_user.organization_id) != str(organization_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Sadece kendi organizasyonunuzdan müvekkil çıkarabilirsiniz"
-            )
-
-    updated = await muvekkil_crud.remove_organization(
-        db,
-        muvekkil=muvekkil,
-        organization=organization
+    """Soft-archive a portal: hides from default list, preserves data."""
+    muvekkil = await _get_portal_or_404(
+        db, muvekkil_id=muvekkil_id, current_user=current_user
     )
-    return updated
+    if muvekkil.is_archived:
+        return muvekkil
+    muvekkil = await muvekkil_crud.archive(db, muvekkil=muvekkil)
+    await db.commit()
+    await db.refresh(muvekkil)
+    return muvekkil
 
 
-@router.get(
-    "/{muvekkil_id}/organizations",
-    response_model=List[OrganizationResponse]
-)
-async def get_muvekkil_organizations(
+@router.post("/{muvekkil_id}/unarchive", response_model=MuvekkillResponse)
+async def unarchive_muvekkil(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
-    """
-    Get all organizations for a muvekkil (admin only).
-
-    Raises:
-        HTTPException: If muvekkil not found
-    """
-    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı"
-        )
-    return muvekkil.organizations
+    muvekkil = await _get_portal_or_404(
+        db, muvekkil_id=muvekkil_id, current_user=current_user
+    )
+    if not muvekkil.is_archived:
+        return muvekkil
+    muvekkil = await muvekkil_crud.unarchive(db, muvekkil=muvekkil)
+    await db.commit()
+    await db.refresh(muvekkil)
+    return muvekkil
 
 
-def _check_muvekkil_org_access(
-    muvekkil,
-    current_user: User,
-    forbidden_detail: str,
-) -> None:
-    """Raise 403 if the admin user has no organization access to muvekkil."""
-    user_roles = [role.name.lower() for role in current_user.roles]
-    if "superuser" in user_roles:
-        return
-    org_ids = [org.id for org in muvekkil.organizations]
-    if current_user.organization_id not in org_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=forbidden_detail,
-        )
+# ---------------------------------------------------------------------------
+# Iliskili muvekkiller (unchanged contract)
+# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -390,19 +299,10 @@ def _check_muvekkil_org_access(
 async def list_assigned_iliskili_muvekkiller(
     muvekkil_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
-    """List iliskili muvekkiller assigned to this muvekkil."""
-    muvekkil = await muvekkil_crud.get_with_organizations(db, id=muvekkil_id)
-    if not muvekkil:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Müvekkil bulunamadı",
-        )
-
-    _check_muvekkil_org_access(
-        muvekkil, current_user, "Bu müvekkile erişim yetkiniz yok"
+    """List iliskili muvekkiller assigned to this portal."""
+    await _get_portal_or_404(
+        db, muvekkil_id=muvekkil_id, current_user=current_user
     )
-
-    results = await iliskili_muvekkil_crud.get_by_muvekkil(db, muvekkil_id=muvekkil_id)
-    return results
+    return await iliskili_muvekkil_crud.get_by_muvekkil(db, muvekkil_id=muvekkil_id)
