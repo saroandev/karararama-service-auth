@@ -100,29 +100,21 @@ class CRUDInvitation(CRUDBase[Invitation, InvitationCreate, InvitationResponse])
         organization_id: UUID,
         invited_by_user_id: UUID,
         role: str = "member",
+        muvekkil_id: Optional[UUID] = None,
+        portal_role: Optional[str] = None,
         expires_in_days: Optional[int] = None,
     ) -> Invitation:
-        """
-        Create invitation with auto-generated token.
+        """Create invitation with auto-generated token.
 
-        Args:
-            db: Database session
-            email: Email address
-            organization_id: Organization ID
-            invited_by_user_id: User who is inviting
-            role: Role to assign (default: member)
-            expires_in_days: Days until expiration (default: settings.INVITATION_EXPIRE_DAYS)
-
-        Returns:
-            Created invitation
+        Org-level invite (legacy): omit `muvekkil_id` / `portal_role`.
+        Portal-scoped invite:       set both — `role` is preserved for
+        the org-level fallback but `portal_role` drives membership on
+        accept.
         """
         if expires_in_days is None:
             expires_in_days = settings.INVITATION_EXPIRE_DAYS
 
-        # Generate unique token
         token = str(uuid4())
-
-        # Calculate expiration
         expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
 
         invitation = Invitation(
@@ -130,9 +122,11 @@ class CRUDInvitation(CRUDBase[Invitation, InvitationCreate, InvitationResponse])
             organization_id=organization_id,
             invited_by_user_id=invited_by_user_id,
             role=role,
+            muvekkil_id=muvekkil_id,
+            portal_role=portal_role,
             token=token,
             status=InvitationStatus.PENDING,
-            expires_at=expires_at
+            expires_at=expires_at,
         )
 
         db.add(invitation)

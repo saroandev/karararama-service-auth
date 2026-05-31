@@ -3,7 +3,7 @@ API v1 router.
 """
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, admin, usage, organizations, uets_accounts, uets_extension, uyap_accounts, uyap_extension, invitations, muvekkiller, departments, iliskili_muvekkiller, roles, billing, mcp, oauth
+from app.api.v1 import auth, users, admin, usage, organizations, uets_accounts, uets_extension, uyap_accounts, uyap_extension, invitations, muvekkiller, portal_members, departments, iliskili_muvekkiller, roles, billing, mcp, oauth
 
 api_router = APIRouter()
 
@@ -18,6 +18,9 @@ api_router.include_router(uyap_accounts.router, prefix="/uyap", tags=["uyap"])
 api_router.include_router(uyap_extension.router, prefix="/uyap-extension", tags=["uyap-extension"])
 api_router.include_router(invitations.router, prefix="/invitations", tags=["invitations"])
 api_router.include_router(muvekkiller.router, prefix="/muvekkiller", tags=["Müvekkiller"])
+# Portal-scoped member + invitation endpoints mounted on the same prefix
+# so URLs read as /muvekkiller/{id}/members etc.
+api_router.include_router(portal_members.router, prefix="/muvekkiller", tags=["Portal Members"])
 api_router.include_router(departments.router, prefix="/departments", tags=["Departments"])
 api_router.include_router(iliskili_muvekkiller.router, prefix="/iliskili-muvekkiller", tags=["İlişkili Müvekkiller"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])

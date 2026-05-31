@@ -42,6 +42,13 @@ class Invitation(Base, UUIDMixin, TimestampMixin):
     organization_id = Column(UUID(), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     invited_by_user_id = Column(UUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(50), nullable=False, default="member")
+    # Portal-scoped invitation extras. NULL muvekkil_id = legacy org-scope
+    # invite (treat exactly as before). Both set = portal invite, role
+    # interpreted as portal_role.
+    muvekkil_id = Column(
+        UUID(), ForeignKey("muvekkiller.id", ondelete="CASCADE"), nullable=True
+    )
+    portal_role = Column(String(32), nullable=True)
     token = Column(String(255), nullable=False, unique=True, index=True)
     status = Column(
         SQLEnum(
@@ -61,12 +68,21 @@ class Invitation(Base, UUIDMixin, TimestampMixin):
         "Organization",
         lazy="selectin"
     )
+    muvekkil = relationship(
+        "Muvekkil",
+        lazy="selectin",
+    )
 
     invited_by = relationship(
         "User",
         foreign_keys=[invited_by_user_id],
         lazy="selectin"
     )
+
+    @property
+    def is_portal_invite(self) -> bool:
+        """Distinguishes a portal-scoped invite from a legacy org invite."""
+        return self.muvekkil_id is not None
 
     def __repr__(self) -> str:
         return f"<Invitation(id={self.id}, email={self.email}, status={self.status})>"

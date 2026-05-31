@@ -96,6 +96,14 @@ from app.schemas.muvekkil import (
     MuvekkillResponse,
     MuvekkillListResponse,
 )
+from app.schemas.portal_member import (
+    PortalMemberCreate,
+    PortalMemberUpdate,
+    PortalMemberInviteRequest,
+    PortalMemberResponse,
+    PortalPendingInvite,
+    PortalMembersListResponse,
+)
 from app.schemas.iliskili_muvekkil import (
     IliskiliMuvekkillBase,
     IliskiliMuvekkillCreate,
@@ -191,6 +199,13 @@ __all__ = [
     "MuvekkillUpdate",
     "MuvekkillResponse",
     "MuvekkillListResponse",
+    # Portal Member
+    "PortalMemberCreate",
+    "PortalMemberUpdate",
+    "PortalMemberInviteRequest",
+    "PortalMemberResponse",
+    "PortalPendingInvite",
+    "PortalMembersListResponse",
     # Iliskili Muvekkil
     "IliskiliMuvekkillBase",
     "IliskiliMuvekkillCreate",
