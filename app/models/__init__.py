@@ -15,7 +15,8 @@ from app.models.invitation import Invitation, InvitationStatus
 from app.models.email_verification import EmailVerification
 from app.models.organization_member import OrganizationMember
 from app.models.password_reset import PasswordResetToken
-from app.models.muvekkil import Muvekkil, MuvekkilUnvan, muvekkil_organizations
+from app.models.muvekkil import Muvekkil, MuvekkilUnvan
+from app.models.portal_member import PortalMember, PortalRole
 from app.models.iliskili_muvekkil import IliskiliMuvekkil
 from app.models.department import Department
 from app.models.payment import Payment
@@ -43,6 +44,8 @@ __all__ = [
     "PasswordResetToken",
     "Muvekkil",
     "MuvekkilUnvan",
+    "PortalMember",
+    "PortalRole",
     "IliskiliMuvekkil",
     "Department",
     "Payment",
@@ -53,5 +56,4 @@ __all__ = [
     "OAuthRefreshToken",
     "user_roles",
     "role_permissions",
-    "muvekkil_organizations",
 ]

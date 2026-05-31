@@ -82,6 +82,19 @@ class User(Base, UUIDMixin, TimestampMixin):
     # Organization
     organization_id = Column(UUID(), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
 
+    # User type — distinguishes firm-side (avukat/çalışan) accounts from
+    # client-side Guest user accounts. Stored as plain VARCHAR so new
+    # types don't need a schema migration. Defaults preserve legacy rows.
+    #   - "organization_member": belongs to an organization, full app access
+    #   - "guest":               portal-only access, OTP login, no org owner role
+    user_type = Column(
+        String(32),
+        nullable=False,
+        default="organization_member",
+        server_default="organization_member",
+        index=True,
+    )
+
     # Relationships
     organization = relationship(
         "Organization",
@@ -103,6 +116,13 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     refresh_tokens = relationship(
         "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
+    portal_memberships = relationship(
+        "PortalMember",
+        foreign_keys="PortalMember.user_id",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="select"

@@ -76,8 +76,9 @@ class Organization(Base, UUIDMixin, TimestampMixin):
 
     muvekkiller = relationship(
         "Muvekkil",
-        secondary="muvekkil_organizations",
-        back_populates="organizations",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
         lazy="select"
     )
 
