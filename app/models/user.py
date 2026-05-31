@@ -95,6 +95,15 @@ class User(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
+    # Currently-focused portal (UX hint only — portal_members is still the
+    # access authority). Persisted so the next login defaults to the same
+    # portal the user last switched into.
+    active_portal_id = Column(
+        UUID(),
+        ForeignKey("muvekkiller.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Relationships
     organization = relationship(
         "Organization",
