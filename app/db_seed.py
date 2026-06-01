@@ -46,6 +46,7 @@ async def seed_permissions(db: AsyncSession):
         ("documents", "edit_metadata", "Meta veri düzenleme"),
         ("documents", "bulk_operations", "Toplu işlemler"),
         ("documents", "manage_versions", "Versiyon yönetimi"),
+        ("documents", "convert", "Belge format dönüştürme (DOCX→PDF, vb.)"),
         ("documents", "*", "Tüm document işlemleri"),
 
         # Research/Query permissions
@@ -305,6 +306,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "documents:upload", "documents:read", "documents:update", "documents:delete",
                 "documents:download", "documents:share", "documents:tag", "documents:search",
                 "documents:edit_metadata", "documents:bulk_operations", "documents:manage_versions",
+                "documents:convert",
                 # Research - Full access
                 "research:query", "research:history", "research:save", "research:delete_saved",
                 "research:export", "research:advanced_search", "research:create_templates",
@@ -349,6 +351,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Documents - Basic operations
                 "documents:upload", "documents:read", "documents:update", "documents:delete",
                 "documents:download", "documents:search", "documents:tag", "documents:extract",
+                "documents:convert",
                 # Research - Basic
                 "research:query", "research:history", "research:save", "research:delete_saved",
                 # Usage
@@ -431,6 +434,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "documents:upload", "documents:read", "documents:update", "documents:delete",
                 "documents:download", "documents:share", "documents:tag", "documents:search",
                 "documents:extract", "documents:edit_metadata", "documents:bulk_operations",
+                "documents:convert",
                 # Research - Full access
                 "research:query", "research:history", "research:save", "research:delete_saved",
                 "research:export", "research:advanced_search", "research:create_templates",
@@ -477,7 +481,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Documents - Standard operations
                 "documents:upload", "documents:read", "documents:update", "documents:delete",
                 "documents:download", "documents:share", "documents:tag", "documents:search",
-                "documents:extract", "documents:edit_metadata",
+                "documents:extract", "documents:edit_metadata", "documents:convert",
                 # Research - Full access
                 "research:query", "research:history", "research:save", "research:delete_saved",
                 "research:export", "research:advanced_search",
@@ -517,6 +521,7 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Documents - Basic operations
                 "documents:upload", "documents:read", "documents:download",
                 "documents:search", "documents:extract", "documents:tag",
+                "documents:convert",
                 # Research - Basic access
                 "research:query", "research:history", "research:save",
                 "research:delete_saved", "research:export",
