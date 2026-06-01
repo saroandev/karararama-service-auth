@@ -166,6 +166,7 @@ async def seed_permissions(db: AsyncSession):
 
         # Manuel-Masraf permissions
         ("manuel-masraf", "ekle", "Manuel masraf ekleme"),
+        ("manuel-masraf", "sil", "Manuel masraf silme"),
     ]
 
     permissions = {}
@@ -286,7 +287,8 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "tebligat:senkronize",
                 "gorev:senkronize",
                 # Manuel-Masraf
-                "manuel-masraf:ekle"
+                "manuel-masraf:ekle",
+                "manuel-masraf:sil"
             ]
         },
         {
@@ -415,7 +417,8 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "muvekkiller:create", "muvekkiller:read", "muvekkiller:update",
                 "muvekkiller:delete", "muvekkiller:manage_organizations",
                 # Manuel-Masraf
-                "manuel-masraf:ekle"
+                "manuel-masraf:ekle",
+                "manuel-masraf:sil"
             ]
         },
         {
@@ -463,7 +466,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Görev - Ekip yönetimi (atama + durum)
                 "gorev:durum-guncelle",
                 "gorev:atama-ekle",
-                "gorev:atama-sil"
+                "gorev:atama-sil",
+                # Manuel-Masraf
+                "manuel-masraf:sil"
             ]
         },
         {
@@ -503,7 +508,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Security
                 "security:view_sessions", "security:view_login_history", "security:manage_2fa",
                 # Muvekkiller
-                "muvekkiller:create", "muvekkiller:read", "muvekkiller:update"
+                "muvekkiller:create", "muvekkiller:read", "muvekkiller:update",
+                # Manuel-Masraf
+                "manuel-masraf:sil"
             ]
         },
         {
