@@ -162,6 +162,9 @@ async def seed_permissions(db: AsyncSession):
         ("gorev-kural", "goruntule", "Görev kurallarını görüntüleme"),
         ("gorev-kural", "yonet", "Görev kurallarını yönetme (oluştur/güncelle/sil)"),
         ("gorev-kural", "*", "Tüm görev-kural işlemleri"),
+
+        # Manuel-Masraf permissions
+        ("manuel-masraf", "ekle", "Manuel masraf ekleme"),
     ]
 
     permissions = {}
@@ -280,7 +283,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "muvekkiller:*",
                 # Tebligat & Görev - Sync only (owner coordinates external sync)
                 "tebligat:senkronize",
-                "gorev:senkronize"
+                "gorev:senkronize",
+                # Manuel-Masraf
+                "manuel-masraf:ekle"
             ]
         },
         {
@@ -405,7 +410,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 "security:view_login_history", "security:manage_2fa",
                 # Muvekkiller - Full access
                 "muvekkiller:create", "muvekkiller:read", "muvekkiller:update",
-                "muvekkiller:delete", "muvekkiller:manage_organizations"
+                "muvekkiller:delete", "muvekkiller:manage_organizations",
+                # Manuel-Masraf
+                "manuel-masraf:ekle"
             ]
         },
         {
