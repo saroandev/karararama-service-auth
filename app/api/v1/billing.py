@@ -20,6 +20,7 @@ from app.schemas.billing import (
     PaymentResponse,
     PlanCatalogResponse,
     PlanItem,
+    PublicOrderStatusResponse,
     SubscriptionResponse,
 )
 from app.services import billing_service
@@ -148,6 +149,34 @@ async def activate(
         failed_reason=request.failed_reason,
     )
     return ActivateResponse(merchant_oid=payment.merchant_oid, status=payment.status)
+
+
+# ---------------------------------------------------------------------------
+# Public: order status polling (no auth)
+# ---------------------------------------------------------------------------
+#
+# Tarayıcı www.onedocs.com/odeme bridge sayfası buraya periyodik fetch atar
+# (kullanıcının PayTR iframe'i otomatik yönlendirmediği durumlarda). Sadece
+# merchant_oid'in durumunu döndürür; user_id / tutar / PayTR yanıtı gibi
+# hassas alanlar response'a dahil değildir. merchant_oid'ler yeterince uzun
+# ve rastgele olduğu için (ts + user_id_short + 8 hex) bilinmeyen bir
+# merchant_oid'i tahmin etmek pratik olarak mümkün değil.
+
+
+@router.get(
+    "/orders/{merchant_oid}/status",
+    response_model=PublicOrderStatusResponse,
+    summary="Public order status (no auth) — onedocs.com bridge polling icin",
+)
+async def public_order_status(
+    merchant_oid: str,
+    db: AsyncSession = Depends(get_db),
+) -> PublicOrderStatusResponse:
+    stmt = select(Payment).where(Payment.merchant_oid == merchant_oid)
+    payment = (await db.execute(stmt)).scalar_one_or_none()
+    if payment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    return PublicOrderStatusResponse(merchant_oid=payment.merchant_oid, status=payment.status)
 
 
 # ---------------------------------------------------------------------------

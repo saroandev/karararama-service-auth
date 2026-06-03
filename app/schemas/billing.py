@@ -74,6 +74,22 @@ class ActivateResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Public order-status polling (no auth)
+# ---------------------------------------------------------------------------
+
+
+class PublicOrderStatusResponse(BaseModel):
+    """Minimal payload returned from the public polling endpoint.
+
+    Intentionally narrow — only the fields the frontend bridge needs to
+    decide whether to redirect to /odeme/basarili. No user id, no amount,
+    no PayTR response, so the unauthenticated endpoint stays low-risk.
+    """
+    merchant_oid: str
+    status: str  # pending | success | failed | cancelled
+
+
+# ---------------------------------------------------------------------------
 # Subscription / payment listing
 # ---------------------------------------------------------------------------
 
