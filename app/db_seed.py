@@ -177,6 +177,9 @@ async def seed_permissions(db: AsyncSession):
         ("alacak", "ekle", "Alacak ekleme"),
         ("alacak", "duzenle", "Alacak düzenleme"),
         ("alacak", "sil", "Alacak silme"),
+
+        # Personel permissions
+        ("personel", "duzenle", "Personel düzenleme"),
     ]
 
     permissions = {}
@@ -306,7 +309,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Alacak
                 "alacak:ekle",
                 "alacak:duzenle",
-                "alacak:sil"
+                "alacak:sil",
+                # Personel
+                "personel:duzenle"
             ]
         },
         {
@@ -444,7 +449,9 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Alacak
                 "alacak:ekle",
                 "alacak:duzenle",
-                "alacak:sil"
+                "alacak:sil",
+                # Personel
+                "personel:duzenle"
             ]
         },
         {
