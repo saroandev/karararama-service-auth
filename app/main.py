@@ -12,14 +12,18 @@ from app.api.v1 import api_router
 from app.api.well_known import router as well_known_router
 from app.api.oauth_html import router as oauth_html_router
 
+# Swagger/OpenAPI is an attack-surface map — only expose it when DEBUG is on
+# (local dev). Preprod/prod configmaps set DEBUG=False, so docs stay hidden.
+_DOCS_ENABLED = settings.DEBUG
+
 # Create FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
 )
 
 # CORS middleware. `allow_origin_regex` covers the *.onedocs.ai whitelabel
@@ -59,8 +63,10 @@ async def health_check():
 @app.get("/")
 async def root():
     """Root endpoint."""
-    return {
+    payload = {
         "message": f"Welcome to {settings.APP_NAME}",
         "version": settings.APP_VERSION,
-        "docs": "/docs"
     }
+    if _DOCS_ENABLED:
+        payload["docs"] = "/docs"
+    return payload
