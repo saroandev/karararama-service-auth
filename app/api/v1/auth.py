@@ -2,17 +2,21 @@
 Authentication endpoints: login, register, refresh token.
 """
 from datetime import datetime, timedelta
+import os
 import random
 import string
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.captcha import verify_captcha_token
 from app.core.database import get_db
 from app.core.plans import WHITELABEL_PLANS
+from app.core.request_helpers import get_client_ip
 from app.core.security import jwt_handler
 from app.core.permissions import get_data_access_for_user, calculate_remaining_credits
 from app.crud import user_crud, refresh_token_crud, usage_crud, organization_crud, blacklisted_token_crud, invitation_crud, role_crud, password_reset, organization_member_crud
+from app.crud import login_attempt as login_attempt_crud
 from app.crud.activity_watch_token import activity_watch_token_crud
 from app.models import User
 from app.models.invitation import InvitationStatus
@@ -209,11 +213,38 @@ async def register(
     return user
 
 
+async def _reject_login(
+    db: AsyncSession,
+    *,
+    email: str,
+    ip_address: str | None,
+    failure_reason: str,
+    status_code: int,
+    detail,
+    headers: dict[str, str] | None = None,
+) -> "HTTPException":
+    """
+    Record a failed attempt + commit + raise. Centralised so every
+    rejection path in /login is consistent (one ledger row per attempt).
+    """
+    await login_attempt_crud.record_attempt(
+        db,
+        email=email,
+        ip_address=ip_address,
+        success=False,
+        failure_reason=failure_reason,
+    )
+    await db.commit()
+    raise HTTPException(status_code=status_code, detail=detail, headers=headers)
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_db),
     x_org_slug: str | None = Header(default=None, alias="X-Org-Slug"),
+    x_test_secret: str | None = Header(default=None, alias="X-Test-Secret"),
 ) -> TokenResponse:
     """
     Login with email and password.
@@ -229,8 +260,16 @@ async def login(
     When the header is absent (e.g. legacy login from app.onedocs.ai), the
     flow is unchanged: token is issued for the user's existing primary org.
 
+    Progressive brute-force gate runs BEFORE the password check (so the
+    bcrypt cost doesn't become an oracle). See app/crud/login_attempt.py
+    for thresholds and windows. Possible non-401 responses:
+      - 423 Locked: too many failures in last 24h, account suspended
+      - 429 Too Many Requests: cooldown active, Retry-After header set
+      - 428 Precondition Required: CAPTCHA token required for next attempt
+
     Args:
-        login_data: Login credentials
+        request: FastAPI request (used for client IP capture)
+        login_data: Login credentials (+ optional captcha_token)
         db: Database session
         x_org_slug: Optional whitelabel subdomain pin (from FE)
 
@@ -238,10 +277,77 @@ async def login(
         Access and refresh tokens
 
     Raises:
-        HTTPException: If credentials are invalid, or X-Org-Slug points
-            at an unknown/inactive org or one the user has no membership in.
+        HTTPException: see above (401/423/429/428/400/403)
     """
-    # Authenticate user
+    client_ip = get_client_ip(request)
+
+    # Test-only bypass: when TEST_BYPASS_SECRET is set in env AND the request
+    # carries a matching X-Test-Secret header, skip gate evaluation entirely.
+    # Failures are still recorded (so e2e tests can introspect the ledger);
+    # we simply do not block. Fail-closed when secret is unset: any test
+    # claiming to bypass without the server configured will be ignored.
+    _test_secret = os.getenv("TEST_BYPASS_SECRET") or ""
+    _gate_bypassed = bool(
+        _test_secret and x_test_secret and x_test_secret == _test_secret
+    )
+
+    # ───── Progressive brute-force gate ─────────────────────────────────
+    decision = (
+        login_attempt_crud.GateDecision(action=login_attempt_crud.GateAction.ALLOW)
+        if _gate_bypassed
+        else await login_attempt_crud.evaluate_gate(
+            db, email=login_data.email, ip_address=client_ip
+        )
+    )
+
+    if decision.action == login_attempt_crud.GateAction.LOCKED:
+        await _reject_login(
+            db, email=login_data.email, ip_address=client_ip,
+            failure_reason="locked",
+            status_code=status.HTTP_423_LOCKED,
+            detail={
+                "code": "locked",
+                "message": "Çok fazla başarısız giriş denemesi nedeniyle hesap geçici olarak kilitli. Şifrenizi sıfırlayarak veya 24 saat sonra tekrar deneyebilirsiniz.",
+                "locked_until": decision.locked_until.isoformat() if decision.locked_until else None,
+            },
+        )
+
+    if decision.action == login_attempt_crud.GateAction.COOLDOWN:
+        await _reject_login(
+            db, email=login_data.email, ip_address=client_ip,
+            failure_reason="cooldown",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "cooldown",
+                "message": "Çok fazla başarısız deneme. Lütfen kısa süre sonra tekrar deneyin.",
+                "retry_after_seconds": decision.retry_after_seconds,
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds or 900)},
+        )
+
+    if decision.action == login_attempt_crud.GateAction.CAPTCHA_REQUIRED:
+        if not login_data.captcha_token:
+            await _reject_login(
+                db, email=login_data.email, ip_address=client_ip,
+                failure_reason="captcha_required",
+                status_code=428,  # Precondition Required
+                detail={
+                    "code": "captcha_required",
+                    "message": "Güvenlik doğrulaması gerekli. Lütfen captcha'yı tamamlayın.",
+                },
+            )
+        captcha_ok = await verify_captcha_token(
+            login_data.captcha_token, client_ip=client_ip
+        )
+        if not captcha_ok:
+            await _reject_login(
+                db, email=login_data.email, ip_address=client_ip,
+                failure_reason="captcha_invalid",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Güvenlik doğrulaması başarısız",
+            )
+
+    # ───── Authentication ──────────────────────────────────────────────
     user = await user_crud.authenticate(
         db,
         email=login_data.email,
@@ -249,37 +355,47 @@ async def login(
     )
 
     if not user:
-        raise HTTPException(
+        await _reject_login(
+            db, email=login_data.email, ip_address=client_ip,
+            failure_reason="bad_credentials",
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-posta veya şifre hatalı"
+            detail="E-posta veya şifre hatalı",
         )
 
     if not user.is_active:
-        raise HTTPException(
+        await _reject_login(
+            db, email=login_data.email, ip_address=client_ip,
+            failure_reason="inactive",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hesap aktif değil"
+            detail="Hesap aktif değil",
         )
 
     # Check if email is verified
     if not user.is_verified:
-        raise HTTPException(
+        await _reject_login(
+            db, email=login_data.email, ip_address=client_ip,
+            failure_reason="unverified",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Lütfen e-posta adresinizi doğrulayın"
+            detail="Lütfen e-posta adresinizi doğrulayın",
         )
 
     # Check if user has at least one role
     if not user.roles or len(user.roles) == 0:
-        raise HTTPException(
+        await _reject_login(
+            db, email=login_data.email, ip_address=client_ip,
+            failure_reason="no_role",
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Hesabınız rol ataması bekliyor. Lütfen yönetici ile iletişime geçin."
+            detail="Hesabınız rol ataması bekliyor. Lütfen yönetici ile iletişime geçin.",
         )
 
     # Every user is provisioned with a personal organization at registration;
     # this defensive check catches data-integrity regressions.
     if not user.organization_id:
-        raise HTTPException(
+        await _reject_login(
+            db, email=login_data.email, ip_address=client_ip,
+            failure_reason="no_org",
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Hesabınız organizasyon ataması bekliyor. Lütfen yönetici ile iletişime geçin."
+            detail="Hesabınız organizasyon ataması bekliyor. Lütfen yönetici ile iletişime geçin.",
         )
 
     # Whitelabel pin (X-Org-Slug). If present and resolves to a real org,
@@ -314,7 +430,9 @@ async def login(
                 organization_id=target_org.id,
             )
             if not membership:
-                raise HTTPException(
+                await _reject_login(
+                    db, email=login_data.email, ip_address=client_ip,
+                    failure_reason="no_org_membership",
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Bu organizasyonda hesabınız yok",
                 )
@@ -361,6 +479,16 @@ async def login(
         token=refresh_token,
         device_info=None  # TODO: Extract from request headers
     )
+
+    # Record successful attempt — also resets the email-axis gate window so
+    # earlier fat-finger failures no longer count against the user.
+    await login_attempt_crud.record_attempt(
+        db,
+        email=user.email,
+        ip_address=client_ip,
+        success=True,
+    )
+    await db.commit()
 
     # Check if user needs onboarding (no organization)
     needs_onboarding = user.organization_id is None
@@ -1312,6 +1440,14 @@ async def reset_password(
 
     # Security: Revoke all refresh tokens (logout from all devices)
     revoked_count = await refresh_token_crud.revoke_all_user_tokens(db, user_id=user.id)
+
+    # Reset the brute-force gate's email window so the user can sign in
+    # immediately with their new password — earlier failures (which likely
+    # triggered the reset in the first place) stop counting.
+    await login_attempt_crud.reset_email_window(
+        db, email=user.email, reason="password_reset"
+    )
+    await db.commit()
 
     # Note: We cannot blacklist all access tokens because we don't have them stored
     # Access tokens will naturally expire after 30 minutes

@@ -11,6 +11,10 @@ class LoginRequest(BaseModel):
     """Login request schema."""
     email: EmailStr
     password: str
+    # Cloudflare Turnstile token. Only required when the server signalled
+    # captcha_required (HTTP 428) on a previous attempt — sent transparently
+    # by the FE after the user clears the widget.
+    captcha_token: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
