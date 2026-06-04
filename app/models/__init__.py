@@ -24,6 +24,7 @@ from app.models.mcp_api_key import MCPApiKey
 from app.models.oauth_client import OAuthClient
 from app.models.oauth_authorization_code import OAuthAuthorizationCode
 from app.models.oauth_refresh_token import OAuthRefreshToken
+from app.models.login_attempt import LoginAttempt
 
 __all__ = [
     "Organization",
@@ -51,6 +52,7 @@ __all__ = [
     "OAuthClient",
     "OAuthAuthorizationCode",
     "OAuthRefreshToken",
+    "LoginAttempt",
     "user_roles",
     "role_permissions",
     "muvekkil_organizations",
