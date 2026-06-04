@@ -1325,21 +1325,22 @@ async def reset_password(
 @router.get("/lookup")
 async def lookup_user_by_email(
     email: str,
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Public endpoint (no JWT). Returns user_id and the organization_id
-    where the user is owner. Returns 404 if user not found.
+    Authenticated lookup: returns user_id and owner organization_id only when
+    the looked-up user belongs to the caller's organization. Cross-org and
+    "not found" both return 404 — uniform response prevents this endpoint
+    from being used as a global user/org enumeration oracle.
     """
     user = await user_crud.get_by_email(db, email=email)
-    if not user:
+    if not user or user.organization_id != current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Kullanıcı bulunamadı",
         )
 
-    owner_org_id = None
-    from app.crud import organization_crud as org_crud
     from sqlalchemy import select
     from app.models.organization import Organization
     result = await db.execute(
