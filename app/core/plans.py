@@ -1,12 +1,24 @@
 """
 Plan catalog and billing constants.
 
-Pricing model: USD per user per month. PayTR charges in TRY (kuruş);
-the daily USD→TRY exchange rate is applied at order creation time.
+Pricing model: Yıllık TRY (KDV hariç) per user. Mevcut "USD per user per
+month" modeli kaldırıldı çünkü FE artık sabit TRY etiketleri gösteriyor ve
+USD/TRY kuru tahsilat anında değişince frontend ile backend tutarsız oluyordu.
 
-Billing cycles:
-- yearly   = 12 months prepaid
-- sixmonth = 6 months prepaid
+Tahsilat hesabı:
+    paket_tutari = price_try_per_user_yearly * seat_count
+    addon_tutari = ARCHIVE_ADDON_PRICE_TRY (eğer checkbox)
+    ara_toplam   = paket_tutari + addon_tutari
+    indirim      = ara_toplam * (discount_percent / 100)  (uygulandıysa)
+    net          = ara_toplam - indirim
+    kdv          = net * (VAT_PERCENT / 100)
+    toplam       = net + kdv
+
+PayTR'a `toplam` kuruş cinsinden gider (`amount_kurus`).
+
+Billing cycle: artık sadece "yearly". `sixmonth` desteği geçici olarak
+çıkarıldı (kullanılmıyordu); ileride lazım olursa BILLING_CYCLES'a tekrar
+eklenebilir, hesap formülü değişmiyor.
 """
 from typing import Optional, TypedDict
 
@@ -14,22 +26,22 @@ from typing import Optional, TypedDict
 class PlanDefinition(TypedDict):
     name: str
     min_users: int
-    max_users: Optional[int]  # None = unlimited (Enterprise)
-    price_usd_per_user_monthly: int
+    max_users: Optional[int]                  # None = unlimited (Enterprise)
+    price_try_per_user_yearly: int            # TRY, KDV hariç
     storage_gb_per_user: float
     contact_sales_only: bool
 
 
 # `contact_sales_only`:
-#   True  → frontend "Iletisime Gec" gosterir, /odeme akisi kapali; backend
-#           /billing/orders bu plan icin 400 doner (sadece Solo self-service).
-#   False → /odeme akisi acik (PayTR ile self-service satin alma).
+#   True  → frontend "Sizi arayalım" gösterir, /odeme akışı kapalı; backend
+#           /billing/orders bu plan için 400 döner (sadece Enterprise).
+#   False → /odeme akışı açık (PayTR ile self-service satın alma).
 PLAN_CATALOG: dict[str, PlanDefinition] = {
     "solo": {
         "name": "Solo",
         "min_users": 1,
         "max_users": 1,
-        "price_usd_per_user_monthly": 45,
+        "price_try_per_user_yearly": 24000,
         "storage_gb_per_user": 1.0,
         "contact_sales_only": False,
     },
@@ -37,43 +49,37 @@ PLAN_CATALOG: dict[str, PlanDefinition] = {
         "name": "Team",
         "min_users": 2,
         "max_users": 9,
-        "price_usd_per_user_monthly": 40,
+        "price_try_per_user_yearly": 21600,
         "storage_gb_per_user": 5.0,
-        # Team/Elite/Enterprise satislari satis ekibi uzerinden yurutulur;
-        # self-service PayTR akisi simdilik sadece Solo'ya acik.
-        "contact_sales_only": True,
+        "contact_sales_only": False,
     },
     "elite": {
         "name": "Elite",
         "min_users": 10,
         "max_users": 49,
-        "price_usd_per_user_monthly": 35,
+        "price_try_per_user_yearly": 18000,
         "storage_gb_per_user": 7.5,
-        "contact_sales_only": True,
+        "contact_sales_only": False,
     },
     "enterprise": {
         "name": "Enterprise",
         "min_users": 50,
         "max_users": None,
-        "price_usd_per_user_monthly": 30,
+        "price_try_per_user_yearly": 0,       # fiyat görüşülür
         "storage_gb_per_user": 10.0,
         "contact_sales_only": True,
     },
 }
 
+# 2026 itibariyle aktif tek billing cycle.
 BILLING_CYCLES = {
-    "yearly": 12,    # 12 months
-    "sixmonth": 6,   # 6 months
+    "yearly": 12,
 }
 
-# Plans that count as paid (post-trial)
+# Paid plans (post-trial) — quota dependencies bunu kullanır.
 PAID_PLANS = {"solo", "team", "elite", "enterprise"}
 
-# Plans that include the whitelabel subdomain feature (<slug>.onedocs.ai).
-# Organizations on other plans technically have a slug column (assigned at
-# create time / via migration backfill) but it is intentionally not
-# addressable: the by-slug branding endpoint returns 404 and the login
-# X-Org-Slug pin is treated as a no-op. Upgrade to Elite to unlock.
+# Whitelabel slug (<slug>.onedocs.ai) bu planlarda aktif.
 WHITELABEL_PLANS = {"elite", "enterprise"}
 
 # Plan states
@@ -81,8 +87,17 @@ PLAN_FREE_TRIAL = "free_trial"
 PLAN_EXPIRED_TRIAL = "expired_trial"
 PLAN_EXPIRED_SUBSCRIPTION = "expired_subscription"
 
-# Trial duration
-TRIAL_DURATION_DAYS = 14
+# Trial duration — 24 saat. Mevcut user'ların trial_ends_at değerleri
+# DB'de zaten yazılı olduğu için migration sırasında DOKUNMUYORUZ; sadece
+# yeni kayıtlar 1 günlük trial alır.
+TRIAL_DURATION_DAYS = 1
+
+# KDV oranı (%) — FE'de gösterim ve backend hesabı için tek noktada tut.
+VAT_PERCENT = 20
+
+# Archive add-on (tek seçenek, sabit fiyat).
+ARCHIVE_ADDON_GB = 100
+ARCHIVE_ADDON_PRICE_TRY = 10000  # yıllık, KDV hariç
 
 
 def validate_seat_count(plan: str, seat_count: int) -> bool:
@@ -97,8 +112,8 @@ def validate_seat_count(plan: str, seat_count: int) -> bool:
     return True
 
 
-def calculate_total_usd(plan: str, seat_count: int, billing_cycle: str) -> float:
-    """Total USD amount for the given plan/seats/cycle. Caller should validate inputs."""
+def calculate_plan_total_try(plan: str, seat_count: int) -> int:
+    """Total TRY (yearly, VAT-exclusive) for given plan × seats. Raises KeyError
+    on unknown plan — caller should validate first."""
     definition = PLAN_CATALOG[plan]
-    months = BILLING_CYCLES[billing_cycle]
-    return definition["price_usd_per_user_monthly"] * seat_count * months
+    return int(definition["price_try_per_user_yearly"]) * int(seat_count)

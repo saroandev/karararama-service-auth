@@ -10,11 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_active_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.plans import PLAN_CATALOG
+from app.core.plans import (
+    ARCHIVE_ADDON_GB,
+    ARCHIVE_ADDON_PRICE_TRY,
+    PLAN_CATALOG,
+    VAT_PERCENT,
+)
 from app.models import Payment, User
 from app.schemas.billing import (
     ActivateRequest,
     ActivateResponse,
+    AddonItem,
     CreateOrderRequest,
     CreateOrderResponse,
     PaymentResponse,
@@ -22,9 +28,10 @@ from app.schemas.billing import (
     PlanItem,
     PublicOrderStatusResponse,
     SubscriptionResponse,
+    ValidateDiscountRequest,
+    ValidateDiscountResponse,
 )
 from app.services import billing_service
-from app.services.exchange_rate import get_usd_try_rate
 
 router = APIRouter()
 
@@ -38,8 +45,9 @@ router = APIRouter()
 async def list_plans() -> PlanCatalogResponse:
     """Frontend reads this when rendering the pricing page.
 
-    The exchange rate is fetched live from TCMB (cached 15 min); see
-    `app/services/exchange_rate.py` for fallback chain.
+    Yıllık TRY fiyatları (KDV hariç) doner. Frontend KDV hesabını da yine
+    backend'in verdiği `vat_percent` ile yapar; total backend'de hesaplanır
+    (ödeme sırasında /billing/orders).
     """
     items: List[PlanItem] = []
     for plan_id, definition in PLAN_CATALOG.items():
@@ -49,13 +57,61 @@ async def list_plans() -> PlanCatalogResponse:
                 name=definition["name"],
                 min_users=definition["min_users"],
                 max_users=definition["max_users"],
-                price_usd_per_user_monthly=definition["price_usd_per_user_monthly"],
+                price_try_per_user_yearly=definition["price_try_per_user_yearly"],
                 storage_gb_per_user=definition["storage_gb_per_user"],
                 contact_sales_only=definition["contact_sales_only"],
             )
         )
-    rate, _source = get_usd_try_rate()
-    return PlanCatalogResponse(plans=items, exchange_rate_usd_try=rate)
+    addons = [
+        AddonItem(
+            id="archive_100gb",
+            name=f"{ARCHIVE_ADDON_GB} GB Arşiv Paketi",
+            gb=ARCHIVE_ADDON_GB,
+            price_try_yearly=ARCHIVE_ADDON_PRICE_TRY,
+        ),
+    ]
+    return PlanCatalogResponse(plans=items, addons=addons, vat_percent=VAT_PERCENT)
+
+
+# ---------------------------------------------------------------------------
+# Public: discount code validation (preview)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/discount-codes/validate",
+    response_model=ValidateDiscountResponse,
+    summary="Indirim kodu validate + onizleme",
+)
+async def validate_discount(
+    request: ValidateDiscountRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_active_user),
+) -> ValidateDiscountResponse:
+    """Önizleme — kod geçerli mi + uygulanırsa hangi tutarlar çıkıyor.
+
+    `/billing/orders` çağrısında kodu tekrar göndermek gerekir; bu endpoint
+    sadece kullanıcıya gerçek hesap önizlemesi sunar. Hata durumları:
+      404 — kod yok veya geçersiz (expired/disabled/limit dolu)
+      409 — kullanıcı bu kodu zaten kullanmış
+    """
+    code_row, breakdown = await billing_service.validate_discount_for_user(
+        db,
+        code=request.code,
+        user=user,
+        plan=request.plan,
+        seat_count=request.seat_count,
+        addon_archive_gb=request.addon_archive_gb,
+    )
+    return ValidateDiscountResponse(
+        code=code_row.code,
+        percent_off=code_row.percent_off,
+        subtotal_kurus=breakdown["subtotal_kurus"],
+        discount_amount_kurus=breakdown["discount_amount_kurus"],
+        net_after_discount_kurus=breakdown["net_after_discount_kurus"],
+        vat_kurus=breakdown["vat_kurus"],
+        total_kurus=breakdown["total_kurus"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -81,18 +137,30 @@ async def create_order(
         plan=request.plan,
         billing_cycle=request.billing_cycle,
         seat_count=request.seat_count,
+        addon_archive_gb=request.addon_archive_gb,
+        discount_code=request.discount_code,
+        billing_info=request.billing_info,
     )
     full_name = " ".join(filter(None, [user.first_name, user.last_name])) or user.email
+    # subtotal = amount + discount - vat  (her sey kuruş)  → tutarsızlık önlemek için Payment alanlarından çıkar.
+    subtotal_kurus = (
+        payment.amount_kurus
+        - (payment.vat_kurus or 0)
+        + (payment.discount_amount_kurus or 0)
+    )
     return CreateOrderResponse(
         merchant_oid=payment.merchant_oid,
         amount_kurus=payment.amount_kurus,
-        amount_usd=payment.amount_usd,
-        exchange_rate=payment.exchange_rate,
         plan=payment.plan,
         billing_cycle=payment.billing_cycle,
         seat_count=payment.seat_count,
         user_email=user.email,
         user_name=full_name,
+        subtotal_kurus=subtotal_kurus,
+        discount_amount_kurus=payment.discount_amount_kurus or 0,
+        discount_percent=payment.discount_percent,
+        vat_kurus=payment.vat_kurus or 0,
+        addon_archive_gb=payment.addon_archive_gb or 0,
     )
 
 
@@ -102,11 +170,7 @@ async def create_order(
 
 
 def _require_internal_token(x_internal_token: str | None) -> None:
-    """Reject unless the shared secret matches.
-
-    We treat a missing-or-empty configured token as misconfiguration and fail
-    closed, so a forgotten env var never accidentally turns off auth.
-    """
+    """Reject unless the shared secret matches."""
     expected = settings.INTERNAL_API_TOKEN
     if not expected:
         raise HTTPException(
@@ -130,13 +194,6 @@ async def activate(
     x_internal_token: str | None = Header(default=None, alias="X-Internal-Token"),
     db: AsyncSession = Depends(get_db),
 ) -> ActivateResponse:
-    """Called by the frontend's PayTR callback proxy with the verified status.
-
-    PayTR's hash is re-verified here against PAYTR_MERCHANT_KEY/SALT, so even
-    if the frontend secret leaks the activation path is still authenticated.
-    The X-Internal-Token header is an additional gate so random callers from
-    the public internet cannot reach this endpoint directly.
-    """
     _require_internal_token(x_internal_token)
 
     payment = await billing_service.activate_subscription(
@@ -152,15 +209,8 @@ async def activate(
 
 
 # ---------------------------------------------------------------------------
-# Public: order status polling (no auth)
+# Public: order status polling (no auth) — onedocs.com bridge polling icin
 # ---------------------------------------------------------------------------
-#
-# Tarayıcı www.onedocs.com/odeme bridge sayfası buraya periyodik fetch atar
-# (kullanıcının PayTR iframe'i otomatik yönlendirmediği durumlarda). Sadece
-# merchant_oid'in durumunu döndürür; user_id / tutar / PayTR yanıtı gibi
-# hassas alanlar response'a dahil değildir. merchant_oid'ler yeterince uzun
-# ve rastgele olduğu için (ts + user_id_short + 8 hex) bilinmeyen bir
-# merchant_oid'i tahmin etmek pratik olarak mümkün değil.
 
 
 @router.get(

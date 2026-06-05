@@ -129,6 +129,11 @@ async def build_user_token_payload(
     )
     plan_expires_at_iso = org_plan_expires_at.isoformat() if org_plan_expires_at else None
 
+    # Paywall flag — frontend middleware bunu kullanarak protected route'lardan
+    # /paketler'e zorla yönlendirir. expired_trial veya expired_subscription
+    # durumunda true; aktif veya henüz dolmamış trial'da false.
+    paywall = plan in {"expired_trial", "expired_subscription"}
+
     # Whitelabel slug of the active org — surfaced as a JWT claim so the FE
     # can verify token-vs-subdomain match without an extra round trip
     # (and so other services see which whitelabel context the token came from).
@@ -155,4 +160,5 @@ async def build_user_token_payload(
         "trial_ends_at": trial_ends_at_iso,
         "seat_count": org_seat_count,
         "storage_gb_per_user": org_storage_gb_per_user,
+        "paywall": paywall,
     }

@@ -33,6 +33,10 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
     seat_count = Column(Integer, nullable=False)
     storage_gb_per_user = Column(Numeric(6, 2), nullable=False)
 
+    # Add-on: organizasyona eklenen ekstra arşiv kapasitesi (GB).
+    # Toplam org storage = (storage_gb_per_user * seat_count) + addon_archive_gb.
+    addon_archive_gb = Column(Integer, nullable=False, default=0, server_default="0")
+
     started_at = Column(DateTime, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
 

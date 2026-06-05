@@ -39,14 +39,32 @@ class Payment(Base, UUIDMixin, TimestampMixin):
 
     # Plan details captured at order creation (snapshot)
     plan = Column(String(50), nullable=False)
-    billing_cycle = Column(String(20), nullable=False)  # yearly | sixmonth
+    billing_cycle = Column(String(20), nullable=False)  # yearly
     seat_count = Column(Integer, nullable=False)
     storage_gb_per_user = Column(Numeric(6, 2), nullable=False)
 
+    # Add-on archive (100 GB tek seçenek). seat_count'tan bağımsız sabit tutar.
+    addon_archive_gb = Column(Integer, nullable=False, default=0, server_default="0")
+
+    # İndirim snapshot — order anındaki halini saklarız, kod sonradan silinse
+    # bile burada görünür.
+    discount_code = Column(String(40), nullable=True)
+    discount_percent = Column(Integer, nullable=True)
+    discount_amount_kurus = Column(BigInteger, nullable=False, default=0, server_default="0")
+
+    # KDV (yüzde plans.VAT_PERCENT) ayrı sütunda — fatura/muhasebe için.
+    vat_kurus = Column(BigInteger, nullable=False, default=0, server_default="0")
+
+    # Fatura bilgisi snapshot (BillingInfo.to_snapshot()). Sonradan bilgi
+    # değişse bile bu satırdaki kayıt değişmez.
+    billing_info_snapshot = Column(JSONB, nullable=True)
+
     # Money snapshot
-    amount_kurus = Column(BigInteger, nullable=False)         # what PayTR was charged (TRY * 100)
-    amount_usd = Column(Numeric(10, 2), nullable=False)       # USD equivalent at order time
-    exchange_rate = Column(Numeric(10, 4), nullable=False)    # USD→TRY rate used
+    amount_kurus = Column(BigInteger, nullable=False)         # what PayTR was charged (TRY * 100, VAT dahil)
+    # Legacy alanlar: 2026'dan önce USD üzerinden hesap yapılıyordu. Yeni
+    # akışta `null` kalır; bırakıldı çünkü geçmiş ödemelerin değeri korunmalı.
+    amount_usd = Column(Numeric(10, 2), nullable=True)
+    exchange_rate = Column(Numeric(10, 4), nullable=True)
     currency = Column(String(8), nullable=False, default="TRY")
 
     # Lifecycle
