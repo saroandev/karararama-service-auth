@@ -41,7 +41,8 @@ PLAN_CATALOG: dict[str, PlanDefinition] = {
         "name": "Solo",
         "min_users": 1,
         "max_users": 1,
-        "price_try_per_user_yearly": 24000,
+        # 2026 lansman: liste fiyatı ₺40.000, %50 indirim → ₺20.000 KDV haric.
+        "price_try_per_user_yearly": 20000,
         "storage_gb_per_user": 1.0,
         "contact_sales_only": False,
     },
@@ -49,7 +50,8 @@ PLAN_CATALOG: dict[str, PlanDefinition] = {
         "name": "Team",
         "min_users": 2,
         "max_users": 9,
-        "price_try_per_user_yearly": 21600,
+        # 2026 lansman: liste fiyatı ₺36.000, %50 indirim → ₺18.000 KDV haric.
+        "price_try_per_user_yearly": 18000,
         "storage_gb_per_user": 5.0,
         "contact_sales_only": False,
     },
@@ -57,7 +59,8 @@ PLAN_CATALOG: dict[str, PlanDefinition] = {
         "name": "Elite",
         "min_users": 10,
         "max_users": 49,
-        "price_try_per_user_yearly": 18000,
+        # 2026 lansman: liste fiyatı ₺30.000, %50 indirim → ₺15.000 KDV haric.
+        "price_try_per_user_yearly": 15000,
         "storage_gb_per_user": 7.5,
         "contact_sales_only": False,
     },
