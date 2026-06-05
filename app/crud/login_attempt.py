@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.login_attempt import LoginAttempt
@@ -113,6 +113,30 @@ async def _count_failures(
     return result.scalar() or 0
 
 
+async def _count_distinct_failed_emails_from_ip(
+    db: AsyncSession,
+    *,
+    ip_address: str,
+    since: datetime,
+) -> int:
+    """
+    IP-axis signal: how many different accounts have a failed attempt from
+    this IP in the window. This is what password-spray actually looks like
+    (one IP, many emails). Counting raw attempts here would punish NAT'd
+    users — a small office or family WiFi shares one public IP, and one
+    person's fat-fingering would cooldown everyone else.
+    """
+    stmt = select(func.count(distinct(LoginAttempt.email))).where(
+        and_(
+            LoginAttempt.ip_address == ip_address,
+            LoginAttempt.success.is_(False),
+            LoginAttempt.created_at >= since,
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalar() or 0
+
+
 async def evaluate_gate(
     db: AsyncSession,
     *,
@@ -149,12 +173,21 @@ async def evaluate_gate(
         db, email=email, since=max(email_lower_bound, captcha_window_start)
     )
 
-    # IP axis — only meaningful if we actually captured an IP.
+    # IP axis — count DISTINCT failed emails from this IP, not raw fails.
+    # A single user's repeated mistakes belong to the email axis; the IP
+    # axis exists to detect password spray (one IP hitting many accounts).
+    # Only meaningful if we actually captured an IP.
     ip_24h = ip_1h = ip_15m = 0
     if ip_address:
-        ip_24h = await _count_failures(db, ip_address=ip_address, since=lock_window_start)
-        ip_1h = await _count_failures(db, ip_address=ip_address, since=cooldown_window_start)
-        ip_15m = await _count_failures(db, ip_address=ip_address, since=captcha_window_start)
+        ip_24h = await _count_distinct_failed_emails_from_ip(
+            db, ip_address=ip_address, since=lock_window_start
+        )
+        ip_1h = await _count_distinct_failed_emails_from_ip(
+            db, ip_address=ip_address, since=cooldown_window_start
+        )
+        ip_15m = await _count_distinct_failed_emails_from_ip(
+            db, ip_address=ip_address, since=captcha_window_start
+        )
 
     # Resolve strictest tier; remember which axis crossed it first.
     def _pick(email_count: int, ip_count: int) -> tuple[int, str]:
