@@ -30,6 +30,9 @@ from app.models import (
     OAuthClient,
     OAuthAuthorizationCode,
     OAuthRefreshToken,
+    BillingInfo,
+    DiscountCode,
+    DiscountCodeUse,
 )
 
 # this is the Alembic Config object

@@ -25,6 +25,8 @@ from app.models.oauth_client import OAuthClient
 from app.models.oauth_authorization_code import OAuthAuthorizationCode
 from app.models.oauth_refresh_token import OAuthRefreshToken
 from app.models.login_attempt import LoginAttempt
+from app.models.billing_info import BillingInfo
+from app.models.discount_code import DiscountCode, DiscountCodeUse
 
 __all__ = [
     "Organization",
@@ -53,6 +55,9 @@ __all__ = [
     "OAuthAuthorizationCode",
     "OAuthRefreshToken",
     "LoginAttempt",
+    "BillingInfo",
+    "DiscountCode",
+    "DiscountCodeUse",
     "user_roles",
     "role_permissions",
     "muvekkil_organizations",
