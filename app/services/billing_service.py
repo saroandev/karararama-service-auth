@@ -394,11 +394,22 @@ async def activate_subscription(
     if payment.status in ("success", "failed"):
         return payment
 
-    # Money check (PayTR sends total_amount in kuruş as a string)
+    # Money check: PayTR callback'inde iki ayri alan var —
+    #   * total_amount   = musterinin kartindan cekilen tutar (taksit vade
+    #                       farki PayTR + banka tarafindan eklenir)
+    #   * payment_amount = bizim get-token ile gonderdigimiz ve satici olarak
+    #                       alacagimiz tutar — yani siparis tutari
+    # Stored `payment.amount_kurus` get-token'a gonderilen ayni tutardir, o
+    # yuzden karsilastirma payment_amount ile yapilmali. Eski sekilde
+    # total_amount kullanmak taksit vade farki olan her odemede mismatch
+    # uretiyordu (denizgunaycalik@gmail.com 2026-06-05 incident).
+    # Eski callback'ler (FE eski surum, payment_amount yoksa) icin geriye
+    # donuk total_amount fallback'i kaliyor.
+    pa_raw = (paytr_response or {}).get("payment_amount") if paytr_response else None
     try:
-        callback_amount = int(total_amount)
-    except ValueError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid total_amount")
+        callback_amount = int(pa_raw) if pa_raw is not None else int(total_amount)
+    except (TypeError, ValueError):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid payment_amount")
     if callback_amount != payment.amount_kurus:
         payment.status = "failed"
         payment.failed_reason = f"Amount mismatch: expected {payment.amount_kurus}, got {callback_amount}"
