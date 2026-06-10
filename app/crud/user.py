@@ -1,7 +1,7 @@
 """
 CRUD operations for User model.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.base import CRUDBase
+from app.core.plans import PLAN_FREE_TRIAL, TRIAL_DURATION_DAYS
 from app.models import Role, User
 from app.models.user import user_roles as user_roles_table
 from app.schemas import UserCreate, UserUpdate
@@ -83,7 +84,6 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         user_data = obj_in.model_dump(exclude={"password", "password_confirm", "agree_kvkk", "agree_cookies", "agree_privacy"})
         user_data["password_hash"] = hashed_password
 
-        from datetime import datetime, timedelta
         if obj_in.agree_kvkk:
             user_data["kvkk_consent_at"] = datetime.utcnow()
         if obj_in.agree_cookies:
@@ -91,10 +91,17 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         if obj_in.agree_privacy:
             user_data["privacy_consent_at"] = datetime.utcnow()
 
-        # SaaS plan: new users start with 14-day free trial
-        user_data["plan"] = "free_trial"
-        user_data["trial_started_at"] = datetime.utcnow()
-        user_data["trial_ends_at"] = datetime.utcnow() + timedelta(days=14)
+        # Trial alanlari: User satirinda ve Organization satirinda ayni sureyi
+        # yazmak zorundayiz cunku login orgs.plan'a bakiyor; user.trial_ends_at
+        # FE tarafindan UI'da gosterim icin. TRIAL_DURATION_DAYS tek
+        # kaynak — eskiden burada 14 hardcode'lanmis, user_onboarding.py
+        # ise constant'i kullaniyordu; sonucta yeni kayit kullanicilarda iki
+        # tarih farkli olusup login akisi org tarafindaki kisa sureye takiliyor
+        # (salihdemir@novahdb.com 2026-06-05 incident).
+        now = datetime.utcnow()
+        user_data["plan"] = PLAN_FREE_TRIAL
+        user_data["trial_started_at"] = now
+        user_data["trial_ends_at"] = now + timedelta(days=TRIAL_DURATION_DAYS)
 
         db_obj = User(**user_data)
         db.add(db_obj)
