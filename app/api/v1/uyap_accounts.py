@@ -6,15 +6,17 @@ are scoped per-user-per-org). Names must be unique within an organization
 but any member of the org can add/list/remove them. The active organization
 and acting user are taken from the JWT.
 """
+from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import get_jwt_payload, require_permission
 from app.core.security import JWTPayload
+from app.crud import organization_member_crud
 from app.crud.uyap_account import uyap_account_crud
 from app.schemas.uyap_account import (
     UyapAccountCreate,
@@ -35,22 +37,48 @@ router = APIRouter()
 )
 async def connect_uyap_account(
     account_data: UyapAccountCreate,
+    organization_id: Optional[UUID] = Query(
+        None,
+        description=(
+            "Target organization. When omitted, the caller's active "
+            "organization from the JWT is used. The caller must be a member "
+            "of the given organization."
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     payload: JWTPayload = Depends(require_permission("uyap-account", "connect")),
 ) -> UyapAccountResponse:
     """
-    Add a UYAP account to the caller's *active* organization. The active org
-    and acting user are taken from the JWT, not from the User row.
+    Add a UYAP account to an organization. The target org defaults to the
+    caller's *active* organization from the JWT, but an explicit
+    ``organization_id`` may be passed to act on another org the caller belongs
+    to (e.g. without switching their active org). The acting user is always
+    taken from the JWT.
     """
-    if not payload.organization_id:
+    target_org_id = organization_id or (
+        UUID(payload.organization_id) if payload.organization_id else None
+    )
+    if target_org_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Kullanıcının bir organizasyona atanması gerekiyor"
         )
 
+    # When acting on an org other than the JWT's active one, verify membership
+    # so a caller cannot add accounts to organizations they don't belong to.
+    if str(target_org_id) != payload.organization_id:
+        membership = await organization_member_crud.get_membership(
+            db, user_id=UUID(payload.sub), organization_id=target_org_id
+        )
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bu organizasyonun üyesi değilsiniz"
+            )
+
     uyap_account = await uyap_account_crud.create(
         db,
-        org_id=UUID(payload.organization_id),
+        org_id=target_org_id,
         uyap_account_name=account_data.uyap_account_name,
         created_by_user_id=UUID(payload.sub),
     )
