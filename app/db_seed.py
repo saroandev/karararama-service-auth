@@ -181,6 +181,9 @@ async def seed_permissions(db: AsyncSession):
 
         # Personel permissions
         ("personel", "duzenle", "Personel düzenleme"),
+
+        # UYAP-Dosya permissions
+        ("uyap-dosya", "takip-avukat-yonet", "UYAP dosyası takip avukatı yönetimi"),
     ]
 
     permissions = {}
@@ -300,6 +303,8 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Tebligat & Görev - Sync only (owner coordinates external sync)
                 "tebligat:senkronize",
                 "gorev:senkronize",
+                # UYAP-Dosya
+                "uyap-dosya:takip-avukat-yonet",
                 # Manuel-Masraf
                 "manuel-masraf:ekle",
                 "manuel-masraf:duzenle",
@@ -441,6 +446,8 @@ async def seed_roles(db: AsyncSession, permissions: dict):
                 # Muvekkiller - Full access
                 "muvekkiller:create", "muvekkiller:read", "muvekkiller:update",
                 "muvekkiller:delete", "muvekkiller:manage_organizations",
+                # UYAP-Dosya
+                "uyap-dosya:takip-avukat-yonet",
                 # Manuel-Masraf
                 "manuel-masraf:ekle",
                 "manuel-masraf:duzenle",
