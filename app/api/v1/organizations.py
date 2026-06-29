@@ -465,7 +465,9 @@ async def invite_users_to_organization(
     # activates the cap will be the seat count purchased.
     if organization.seat_count is not None:
         # Existing memberships already account for active users
-        current_member_count = len(organization.memberships) if organization.memberships is not None else 0
+        current_member_count = await organization_crud.get_member_count(
+            db, organization_id=current_user.organization_id
+        )
         # Pending (non-expired) invitations also occupy a future seat
         pending_invites = await invitation_crud.list_pending_for_organization(
             db, organization_id=current_user.organization_id
