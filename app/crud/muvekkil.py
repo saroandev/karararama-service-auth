@@ -84,11 +84,18 @@ class CRUDMuvekkil(CRUDBase[Muvekkil, MuvekkillCreate, MuvekkillUpdate]):
           - ("Ahmet Yılmaz", "")
           - ("", "Ahmet Yılmaz")
           - ("ahmet", "yılmaz")
+
+        Case-folding is delegated to the database `lower()` on BOTH sides.
+        Doing it with Python `str.lower()` on the input would break Turkish
+        names: e.g. Python folds "İ" to "i̇" (i + combining dot) while the DB
+        does not, so the two sides would never match for names containing
+        "İ" (KURUYEMİŞ, TURİZM, ŞİRKETİ, ...).
         """
         if not organization_ids:
             return False
 
-        normalized = " ".join(f"{first_name} {last_name}".split()).lower()
+        # Collapse whitespace only; let the DB handle case-folding (see above).
+        normalized = " ".join(f"{first_name} {last_name}".split())
         if not normalized:
             return False
 
@@ -99,7 +106,7 @@ class CRUDMuvekkil(CRUDBase[Muvekkil, MuvekkillCreate, MuvekkillUpdate]):
             select(Muvekkil.id)
             .join(Muvekkil.organizations)
             .where(
-                stored_full_name == normalized,
+                stored_full_name == func.lower(normalized),
                 Organization.id.in_(list(organization_ids)),
             )
         )
