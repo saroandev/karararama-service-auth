@@ -87,6 +87,19 @@ async def create_muvekkil(
                 detail="Bu e-posta adresi bu organizasyonda zaten kayıtlı"
             )
 
+    # Full-name uniqueness is scoped to the target organization
+    name_exists = await muvekkil_crud.name_exists_in_organizations(
+        db,
+        first_name=muvekkil_in.first_name,
+        last_name=muvekkil_in.last_name,
+        organization_ids=[target_org_id],
+    )
+    if name_exists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu ad-soyad ile bir müvekkil bu organizasyonda zaten kayıtlı"
+        )
+
     muvekkil = await muvekkil_crud.create(
         db, obj_in=muvekkil_in, organization=organization
     )

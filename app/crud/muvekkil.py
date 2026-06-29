@@ -63,6 +63,51 @@ class CRUDMuvekkil(CRUDBase[Muvekkil, MuvekkillCreate, MuvekkillUpdate]):
         result = await db.execute(query.limit(1))
         return result.scalar_one_or_none() is not None
 
+    async def name_exists_in_organizations(
+        self,
+        db: AsyncSession,
+        *,
+        first_name: str,
+        last_name: str,
+        organization_ids: Sequence[UUID],
+        exclude_muvekkil_id: Optional[UUID] = None,
+    ) -> bool:
+        """
+        Check whether a muvekkil with the same full name already exists in any
+        of the given organizations.
+
+        Matching is done on the normalized full name (first_name + last_name
+        combined, case-insensitive, whitespace-collapsed) so the same person
+        entered with a different first/last split is still detected as a
+        duplicate. For example, all of these collide with an existing
+        ("Ahmet", "Yılmaz") record in the same organization:
+          - ("Ahmet Yılmaz", "")
+          - ("", "Ahmet Yılmaz")
+          - ("ahmet", "yılmaz")
+        """
+        if not organization_ids:
+            return False
+
+        normalized = " ".join(f"{first_name} {last_name}".split()).lower()
+        if not normalized:
+            return False
+
+        stored_full_name = func.lower(
+            func.trim(Muvekkil.first_name + " " + Muvekkil.last_name)
+        )
+        query = (
+            select(Muvekkil.id)
+            .join(Muvekkil.organizations)
+            .where(
+                stored_full_name == normalized,
+                Organization.id.in_(list(organization_ids)),
+            )
+        )
+        if exclude_muvekkil_id is not None:
+            query = query.where(Muvekkil.id != exclude_muvekkil_id)
+        result = await db.execute(query.limit(1))
+        return result.scalar_one_or_none() is not None
+
     async def get_with_organizations(
         self,
         db: AsyncSession,
